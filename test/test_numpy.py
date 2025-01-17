@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
 
+from datetime import datetime
 import sys
 
 import pytest
@@ -165,7 +166,7 @@ class TestNumpy:
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
-            == b"[null,null,null,-0.0,0.0,3.140625]"
+            == b"[Infinity,-Infinity,NaN,-0.0,0.0,3.140625]"
         )
 
     def test_numpy_array_f32_edge(self):
@@ -184,7 +185,7 @@ class TestNumpy:
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
-            == b"[null,null,null,-0.0,0.0,3.1415927]"
+            == b"[Infinity,-Infinity,NaN,-0.0,0.0,3.1415927]"
         )
 
     def test_numpy_array_f64_edge(self):
@@ -203,7 +204,7 @@ class TestNumpy:
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
-            == b"[null,null,null,-0.0,0.0,3.141592653589793]"
+            == b"[Infinity,-Infinity,NaN,-0.0,0.0,3.141592653589793]"
         )
 
     def test_numpy_array_d1_f64(self):
@@ -472,6 +473,20 @@ class TestNumpy:
             orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY)
         assert "unsupported datatype in numpy array" in str(cm)
 
+    def test_numpy_array_d0(self):
+        for item in [1, 3.1, False]:
+            print(item)
+            array = numpy.array(item)
+            assert (
+                orjson.loads(
+                    orjson.dumps(
+                        array,
+                        option=orjson.OPT_SERIALIZE_NUMPY,
+                    )
+                )
+                == item
+            )
+
     def test_numpy_array_d1(self):
         array = numpy.array([1])
         assert (
@@ -535,8 +550,7 @@ class TestNumpy:
     def test_numpy_array_dimension_zero(self):
         array = numpy.array(0)
         assert array.ndim == 0
-        with pytest.raises(orjson.JSONEncodeError):
-            orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY)
+        assert orjson.loads(orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY)) == 0
 
         array = numpy.empty((0, 4, 2))
         assert (
