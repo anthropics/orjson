@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.10.14-post2
+
+### Fixed
+
+- Updated tests to correctly expect NaN/Infinity support and overflow handling
+- Fix behavior on 0-dimensional arrays/tensors
+- Fix behavior where Infinity/NaN were incorrectly being written as strings
+
+## 3.10.14-post1
+
+### Added
+
+- Support serializing NaN and Infinity
+- Support serializing PyTorch tensors when numpy serialization is enabled.
+
 
 ## 3.10.15
 
