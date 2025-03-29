@@ -190,3 +190,17 @@ class TestJsonChecker:
         roundtrip030.json
         """
         self._run_roundtrip_json("roundtrip30.json")
+        
+    def test_int_128bit_roundtrip(self):
+        """
+        roundtrip 128-bit integers
+        """
+        for obj in (
+            # i128 range
+            -170141183460469231731687303715884105728,  # i128::MIN
+            -170141183460469231731687303715884105727,
+            170141183460469231731687303715884105727,   # i128::MAX
+            # u128 range (positive only in Python)
+            340282366920938463463374607431768211455,   # u128::MAX
+        ):
+            assert orjson.loads(orjson.dumps(obj)) == obj

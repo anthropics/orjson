@@ -76,11 +76,17 @@ pub trait Formatter {
         Ok(())
     }
 
-    fn write_i128<W>(&mut self, _writer: &mut W, _value: i128) -> io::Result<()>
+    #[inline]
+    fn write_i128<W>(&mut self, writer: &mut W, value: i128) -> io::Result<()>
     where
-        W: ?Sized + io::Write,
+        W: ?Sized + io::Write + WriteExt,
     {
-        unreachable!();
+        // Convert to string since itoap doesn't support i128
+        let s = value.to_string();
+        reserve_minimum!(writer);
+        unsafe {
+            writer.write_reserved_fragment(s.as_bytes())
+        }
     }
 
     fn write_u8<W>(&mut self, _writer: &mut W, _value: u8) -> io::Result<()>
@@ -123,11 +129,17 @@ pub trait Formatter {
         Ok(())
     }
 
-    fn write_u128<W>(&mut self, _writer: &mut W, _value: u128) -> io::Result<()>
+    #[inline]
+    fn write_u128<W>(&mut self, writer: &mut W, value: u128) -> io::Result<()>
     where
-        W: ?Sized + io::Write,
+        W: ?Sized + io::Write + WriteExt,
     {
-        unreachable!();
+        // Convert to string since itoap doesn't support u128
+        let s = value.to_string();
+        reserve_minimum!(writer);
+        unsafe {
+            writer.write_reserved_fragment(s.as_bytes())
+        }
     }
 
     #[inline]

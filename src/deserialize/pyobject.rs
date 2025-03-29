@@ -61,6 +61,52 @@ pub fn parse_u64(val: u64) -> NonNull<pyo3_ffi::PyObject> {
 }
 
 #[inline(always)]
+pub fn parse_i128(val: i128) -> NonNull<pyo3_ffi::PyObject> {
+    // Convert to string and use Python's string parsing
+    // since there's no direct API for 128-bit integers
+    let s = val.to_string();
+    let py_str = nonnull!(ffi!(PyUnicode_FromStringAndSize(
+        s.as_ptr() as *const i8,
+        s.len() as isize
+    )));
+    // Use PyLong_FromString instead since PyLong_FromUnicodeObject isn't available
+    let c_str = std::ffi::CString::new(s).unwrap();
+    let result = unsafe {
+        let ptr = pyo3_ffi::PyLong_FromString(
+            c_str.as_ptr(),
+            std::ptr::null_mut(),
+            10, // base 10
+        );
+        nonnull!(ptr)
+    };
+    ffi!(Py_DECREF(py_str.as_ptr()));
+    result
+}
+
+#[inline(always)]
+pub fn parse_u128(val: u128) -> NonNull<pyo3_ffi::PyObject> {
+    // Convert to string and use Python's string parsing
+    // since there's no direct API for 128-bit integers
+    let s = val.to_string();
+    let py_str = nonnull!(ffi!(PyUnicode_FromStringAndSize(
+        s.as_ptr() as *const i8,
+        s.len() as isize
+    )));
+    // Use PyLong_FromString instead since PyLong_FromUnicodeObject isn't available
+    let c_str = std::ffi::CString::new(s).unwrap();
+    let result = unsafe {
+        let ptr = pyo3_ffi::PyLong_FromString(
+            c_str.as_ptr(),
+            std::ptr::null_mut(),
+            10, // base 10
+        );
+        nonnull!(ptr)
+    };
+    ffi!(Py_DECREF(py_str.as_ptr()));
+    result
+}
+
+#[inline(always)]
 pub fn parse_f64(val: f64) -> NonNull<pyo3_ffi::PyObject> {
     nonnull!(ffi!(PyFloat_FromDouble(val)))
 }

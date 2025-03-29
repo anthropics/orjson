@@ -22,6 +22,9 @@ const TAG_OBJECT: u8 = 0b00000111;
 const TAG_STRING: u8 = 0b00000101;
 const TAG_TRUE: u8 = 0b00001011;
 const TAG_UINT64: u8 = 0b00000100;
+// Define custom tags for 128-bit integers (not part of yyjson)
+const TAG_INT128: u8 = 0b00001101;
+const TAG_UINT128: u8 = 0b00001110;
 
 macro_rules! is_yyjson_tag {
     ($elem:expr, $tag:expr) => {
@@ -81,6 +84,8 @@ pub(crate) fn deserialize(
                 ElementType::String => parse_yy_string(val),
                 ElementType::Uint64 => parse_yy_u64(val),
                 ElementType::Int64 => parse_yy_i64(val),
+                ElementType::Uint128 => parse_yy_u128(val),
+                ElementType::Int128 => parse_yy_i128(val),
                 ElementType::Double => parse_yy_f64(val),
                 ElementType::Null => parse_none(),
                 ElementType::True => parse_true(),
@@ -134,6 +139,8 @@ enum ElementType {
     String,
     Uint64,
     Int64,
+    Uint128,
+    Int128,
     Double,
     Null,
     True,
@@ -148,6 +155,8 @@ impl ElementType {
             TAG_STRING => Self::String,
             TAG_UINT64 => Self::Uint64,
             TAG_INT64 => Self::Int64,
+            TAG_UINT128 => Self::Uint128,
+            TAG_INT128 => Self::Int128,
             TAG_DOUBLE => Self::Double,
             TAG_NULL => Self::Null,
             TAG_TRUE => Self::True,
@@ -175,6 +184,50 @@ fn parse_yy_u64(elem: *mut yyjson_val) -> NonNull<pyo3_ffi::PyObject> {
 #[inline(always)]
 fn parse_yy_i64(elem: *mut yyjson_val) -> NonNull<pyo3_ffi::PyObject> {
     parse_i64(unsafe { (*elem).uni.i64_ })
+}
+
+#[inline(always)]
+fn parse_yy_i128(elem: *mut yyjson_val) -> NonNull<pyo3_ffi::PyObject> {
+    // For i128, we need to parse from the string representation
+    let str_val = unsafe { 
+        std::slice::from_raw_parts(
+            (*elem).uni.str_ as *const u8,
+            unsafe_yyjson_get_len(elem)
+        )
+    };
+    
+    if let Ok(s) = std::str::from_utf8(str_val) {
+        if let Ok(i128_val) = s.parse::<i128>() {
+            return parse_i128(i128_val);
+        }
+        // Fallback to parsing as string if it's valid UTF-8
+        return nonnull!(unicode_from_str(s));
+    }
+    
+    // If we somehow got invalid UTF-8 (shouldn't happen in JSON), use a placeholder
+    nonnull!(unicode_from_str(""))
+}
+
+#[inline(always)]
+fn parse_yy_u128(elem: *mut yyjson_val) -> NonNull<pyo3_ffi::PyObject> {
+    // For u128, we need to parse from the string representation
+    let str_val = unsafe { 
+        std::slice::from_raw_parts(
+            (*elem).uni.str_ as *const u8,
+            unsafe_yyjson_get_len(elem)
+        )
+    };
+    
+    if let Ok(s) = std::str::from_utf8(str_val) {
+        if let Ok(u128_val) = s.parse::<u128>() {
+            return parse_u128(u128_val);
+        }
+        // Fallback to parsing as string if it's valid UTF-8
+        return nonnull!(unicode_from_str(s));
+    }
+    
+    // If we somehow got invalid UTF-8 (shouldn't happen in JSON), use a placeholder
+    nonnull!(unicode_from_str(""))
 }
 
 #[inline(always)]
@@ -222,6 +275,8 @@ fn populate_yy_array(list: *mut pyo3_ffi::PyObject, elem: *mut yyjson_val) {
                     ElementType::String => parse_yy_string(val),
                     ElementType::Uint64 => parse_yy_u64(val),
                     ElementType::Int64 => parse_yy_i64(val),
+                    ElementType::Uint128 => parse_yy_u128(val),
+                    ElementType::Int128 => parse_yy_i128(val),
                     ElementType::Double => parse_yy_f64(val),
                     ElementType::Null => parse_none(),
                     ElementType::True => parse_true(),
@@ -284,6 +339,8 @@ fn populate_yy_object(dict: *mut pyo3_ffi::PyObject, elem: *mut yyjson_val) {
                     ElementType::String => parse_yy_string(val),
                     ElementType::Uint64 => parse_yy_u64(val),
                     ElementType::Int64 => parse_yy_i64(val),
+                    ElementType::Uint128 => parse_yy_u128(val),
+                    ElementType::Int128 => parse_yy_i128(val),
                     ElementType::Double => parse_yy_f64(val),
                     ElementType::Null => parse_none(),
                     ElementType::True => parse_true(),

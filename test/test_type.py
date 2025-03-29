@@ -427,8 +427,18 @@ class TestType:
         """
         int 128-bit
         """
-        for val in (18446744073709551616, -9223372036854775809):
-            pytest.raises(orjson.JSONEncodeError, orjson.dumps, val)
+        # Test 128-bit integer support
+        for val in (
+            18446744073709551616,  # 2^64 (was previously unsupported)
+            -9223372036854775809,  # -2^63-1 (was previously unsupported)
+            340282366920938463463374607431768211455,  # 2^128-1 (u128 max)
+            170141183460469231731687303715884105727,  # 2^127-1 (i128 max)
+            -170141183460469231731687303715884105728,  # -2^127 (i128 min)
+        ):
+            # Now these should all be supported
+            dumps_result = orjson.dumps(val)
+            assert orjson.loads(dumps_result) == val
+            assert dumps_result == str(val).encode("utf-8")
 
     def test_float(self):
         """

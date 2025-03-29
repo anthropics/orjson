@@ -85,7 +85,22 @@ impl Serialize for IntSerializer {
             if crate::ffi::pylong_is_unsigned(self.ptr) {
                 let val = ffi!(PyLong_AsUnsignedLongLong(self.ptr));
                 if unlikely!(val == u64::MAX) && !ffi!(PyErr_Occurred()).is_null() {
+                    // Try u128 if u64 fails
                     ffi!(PyErr_Clear());
+                    let str_val = ffi!(PyObject_Str(self.ptr));
+                    if !str_val.is_null() {
+                        let utf8_str = ffi!(PyUnicode_AsUTF8(str_val));
+                        if !utf8_str.is_null() {
+                            let c_str = std::ffi::CStr::from_ptr(utf8_str);
+                            if let Ok(s) = c_str.to_str() {
+                                if let Ok(u128_val) = s.parse::<u128>() {
+                                    ffi!(Py_DECREF(str_val));
+                                    return serializer.serialize_u128(u128_val);
+                                }
+                            }
+                        }
+                        ffi!(Py_DECREF(str_val));
+                    }
                     err!(SerializeError::Integer64Bits)
                 } else if unlikely!(opt_enabled!(self.opts, STRICT_INTEGER))
                     && val > STRICT_INT_MAX as u64
@@ -97,7 +112,22 @@ impl Serialize for IntSerializer {
             } else {
                 let val = ffi!(PyLong_AsLongLong(self.ptr));
                 if unlikely!(val == -1) && !ffi!(PyErr_Occurred()).is_null() {
+                    // Try i128 if i64 fails
                     ffi!(PyErr_Clear());
+                    let str_val = ffi!(PyObject_Str(self.ptr));
+                    if !str_val.is_null() {
+                        let utf8_str = ffi!(PyUnicode_AsUTF8(str_val));
+                        if !utf8_str.is_null() {
+                            let c_str = std::ffi::CStr::from_ptr(utf8_str);
+                            if let Ok(s) = c_str.to_str() {
+                                if let Ok(i128_val) = s.parse::<i128>() {
+                                    ffi!(Py_DECREF(str_val));
+                                    return serializer.serialize_i128(i128_val);
+                                }
+                            }
+                        }
+                        ffi!(Py_DECREF(str_val));
+                    }
                     err!(SerializeError::Integer64Bits)
                 } else if unlikely!(opt_enabled!(self.opts, STRICT_INTEGER))
                     && !(STRICT_INT_MIN..=STRICT_INT_MAX).contains(&val)

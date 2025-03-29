@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.10.14-post4
+
+### Added
+
+- Add support for 128-bit integers (i128 and u128)
+
 ## 3.10.14-post3
 
 - Defer importing torch. Use heuristics to check torch tensor.
