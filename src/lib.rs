@@ -84,7 +84,7 @@ pub unsafe extern "C" fn orjson_init_exec(mptr: *mut PyObject) -> c_int {
             add!(mptr, "__version__\0", pyversion);
         }
         {
-            let dumps_doc = "dumps(obj, /, default=None, option=None)\n--\n\nSerialize Python objects to JSON.\0";
+            let dumps_doc = "dumps(obj, /, default=None, option=None, allow_nan=True)\n--\n\nSerialize Python objects to JSON.\0";
 
             let wrapped_dumps = PyMethodDef {
                 ml_name: "dumps\0".as_ptr() as *const c_char,
@@ -330,6 +330,7 @@ pub unsafe extern "C" fn dumps(
     unsafe {
         let mut default: Option<NonNull<PyObject>> = None;
         let mut optsptr: Option<NonNull<PyObject>> = None;
+        let mut allow_nan: Option<NonNull<PyObject>> = None;
 
         let num_args = PyVectorcall_NARGS(nargs as usize);
         if unlikely!(num_args == 0) {
@@ -343,6 +344,7 @@ pub unsafe extern "C" fn dumps(
         if num_args & 3 == 3 {
             optsptr = Some(NonNull::new_unchecked(*args.offset(2)));
         }
+        // Note: we only support up to 3 positional args, allow_nan must be passed as keyword
         if unlikely!(!kwnames.is_null()) {
             for i in 0..=Py_SIZE(kwnames).saturating_sub(1) {
                 let arg = PyTuple_GET_ITEM(kwnames, i as Py_ssize_t);
@@ -360,6 +362,13 @@ pub unsafe extern "C" fn dumps(
                         );
                     }
                     optsptr = Some(NonNull::new_unchecked(*args.offset(num_args + i)));
+                } else if arg == typeref::ALLOW_NAN {
+                    if unlikely!(allow_nan.is_some()) {
+                        return raise_dumps_exception_fixed(
+                            "dumps() got multiple values for argument: 'allow_nan'",
+                        );
+                    }
+                    allow_nan = Some(NonNull::new_unchecked(*args.offset(num_args + i)));
                 } else {
                     return raise_dumps_exception_fixed(
                         "dumps() got an unexpected keyword argument",
@@ -378,6 +387,23 @@ pub unsafe extern "C" fn dumps(
                 }
             } else if unlikely!(opts.as_ptr() != typeref::NONE) {
                 return raise_dumps_exception_fixed("Invalid opts");
+            }
+        }
+
+        // Handle allow_nan parameter
+        if let Some(allow_nan_ptr) = allow_nan {
+            let allow_nan_obj = allow_nan_ptr.as_ptr();
+            if allow_nan_obj == typeref::FALSE {
+                optsbits |= opt::DISALLOW_NAN as i32;
+            } else if allow_nan_obj != typeref::TRUE && allow_nan_obj != typeref::NONE {
+                // Check if it's a bool-like object
+                let is_true = PyObject_IsTrue(allow_nan_obj);
+                if unlikely!(is_true == -1) {
+                    return null_mut(); // Error during evaluation
+                }
+                if is_true == 0 {
+                    optsbits |= opt::DISALLOW_NAN as i32;
+                }
             }
         }
 

@@ -316,8 +316,20 @@ impl Serialize for NumpyArray {
         if self.is_zero_dimensional {
             // For zero-dimensional arrays, serialize the single value directly
             match self.kind {
-                ItemType::F64 => DataTypeF64 { obj: unsafe { *(self.data() as *const f64) } }.serialize(serializer),
-                ItemType::F32 => DataTypeF32 { obj: unsafe { *(self.data() as *const f32) } }.serialize(serializer),
+                ItemType::F64 => {
+                    let value = unsafe { *(self.data() as *const f64) };
+                    if self.opts & DISALLOW_NAN != 0 && !value.is_finite() {
+                        return Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"));
+                    }
+                    DataTypeF64 { obj: value }.serialize(serializer)
+                },
+                ItemType::F32 => {
+                    let value = unsafe { *(self.data() as *const f32) };
+                    if self.opts & DISALLOW_NAN != 0 && !value.is_finite() {
+                        return Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"));
+                    }
+                    DataTypeF32 { obj: value }.serialize(serializer)
+                },
                 ItemType::F16 => DataTypeF16 { obj: unsafe { *(self.data() as *const u16) } }.serialize(serializer),
                 ItemType::U64 => DataTypeU64 { obj: unsafe { *(self.data() as *const u64) } }.serialize(serializer),
                 ItemType::U32 => DataTypeU32 { obj: unsafe { *(self.data() as *const u32) } }.serialize(serializer),
@@ -346,12 +358,38 @@ impl Serialize for NumpyArray {
         } else {
             match self.kind {
                 ItemType::F64 => {
-                    NumpyF64Array::new(slice!(self.data() as *const f64, self.num_items()))
-                        .serialize(serializer)
+                    if self.opts & DISALLOW_NAN != 0 {
+                        // Custom serialization with NaN check
+                        let data = slice!(self.data() as *const f64, self.num_items());
+                        let mut seq = serializer.serialize_seq(None).unwrap();
+                        for &each in data.iter() {
+                            if !each.is_finite() {
+                                return Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"));
+                            }
+                            seq.serialize_element(&DataTypeF64 { obj: each }).unwrap();
+                        }
+                        seq.end()
+                    } else {
+                        NumpyF64Array::new(slice!(self.data() as *const f64, self.num_items()))
+                            .serialize(serializer)
+                    }
                 }
                 ItemType::F32 => {
-                    NumpyF32Array::new(slice!(self.data() as *const f32, self.num_items()))
-                        .serialize(serializer)
+                    if self.opts & DISALLOW_NAN != 0 {
+                        // Custom serialization with NaN check
+                        let data = slice!(self.data() as *const f32, self.num_items());
+                        let mut seq = serializer.serialize_seq(None).unwrap();
+                        for &each in data.iter() {
+                            if !each.is_finite() {
+                                return Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"));
+                            }
+                            seq.serialize_element(&DataTypeF32 { obj: each }).unwrap();
+                        }
+                        seq.end()
+                    } else {
+                        NumpyF32Array::new(slice!(self.data() as *const f32, self.num_items()))
+                            .serialize(serializer)
+                    }
                 }
                 ItemType::F16 => {
                     NumpyF16Array::new(slice!(self.data() as *const u16, self.num_items()))
@@ -921,9 +959,9 @@ impl Serialize for NumpyScalar {
             let scalar_types =
                 unsafe { NUMPY_TYPES.get_or_init(load_numpy_types).unwrap().as_ref() };
             if ob_type == scalar_types.float64 {
-                (*(self.ptr as *mut NumpyFloat64)).serialize(serializer)
+                (*(self.ptr as *mut NumpyFloat64)).serialize_with_opts(serializer, self.opts)
             } else if ob_type == scalar_types.float32 {
-                (*(self.ptr as *mut NumpyFloat32)).serialize(serializer)
+                (*(self.ptr as *mut NumpyFloat32)).serialize_with_opts(serializer, self.opts)
             } else if ob_type == scalar_types.float16 {
                 (*(self.ptr as *mut NumpyFloat16)).serialize(serializer)
             } else if ob_type == scalar_types.int64 {
@@ -1129,6 +1167,19 @@ impl Serialize for NumpyFloat32 {
     }
 }
 
+impl NumpyFloat32 {
+    fn serialize_with_opts<S>(&self, serializer: S, opts: Opt) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if opts & DISALLOW_NAN != 0 && !self.value.is_finite() {
+            Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"))
+        } else {
+            serializer.serialize_f32(self.value)
+        }
+    }
+}
+
 #[repr(C)]
 pub struct NumpyFloat64 {
     ob_refcnt: Py_ssize_t,
@@ -1143,6 +1194,19 @@ impl Serialize for NumpyFloat64 {
         S: Serializer,
     {
         serializer.serialize_f64(self.value)
+    }
+}
+
+impl NumpyFloat64 {
+    fn serialize_with_opts<S>(&self, serializer: S, opts: Opt) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if opts & DISALLOW_NAN != 0 && !self.value.is_finite() {
+            Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"))
+        } else {
+            serializer.serialize_f64(self.value)
+        }
     }
 }
 

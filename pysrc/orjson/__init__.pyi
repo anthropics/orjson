@@ -7,6 +7,7 @@ def dumps(
     __obj: Any,
     default: Optional[Callable[[Any], Any]] = ...,
     option: Optional[int] = ...,
+    allow_nan: bool = ...,
 ) -> bytes: ...
 def loads(__obj: Union[bytes, bytearray, memoryview, str]) -> Any: ...
 

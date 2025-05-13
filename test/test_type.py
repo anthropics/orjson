@@ -373,6 +373,78 @@ class TestType:
         assert str(orjson.loads("[-Infinity]")[0]) == "-inf"
         assert str(orjson.loads("[-infinity]")[0]) == "-inf"
 
+    def test_allow_nan_true(self):
+        """
+        allow_nan=True (default) allows NaN and Infinity
+        """
+        assert orjson.dumps(float("NaN"), allow_nan=True) == b"NaN"
+        assert orjson.dumps(float("Infinity"), allow_nan=True) == b"Infinity"
+        assert orjson.dumps(float("-Infinity"), allow_nan=True) == b"-Infinity"
+        # Test default behavior (should be the same as allow_nan=True)
+        assert orjson.dumps(float("NaN")) == b"NaN"
+        assert orjson.dumps(float("Infinity")) == b"Infinity"
+        assert orjson.dumps(float("-Infinity")) == b"-Infinity"
+
+    def test_allow_nan_false(self):
+        """
+        allow_nan=False raises JSONEncodeError for NaN and Infinity
+        """
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps(float("NaN"), allow_nan=False)
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps(float("Infinity"), allow_nan=False)
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps(float("-Infinity"), allow_nan=False)
+
+    def test_allow_nan_in_structures(self):
+        """
+        allow_nan applies to NaN/Infinity in lists and dicts
+        """
+        # With allow_nan=True
+        assert orjson.dumps([float("NaN"), 1, 2], allow_nan=True) == b'[NaN,1,2]'
+        assert orjson.dumps({"x": float("Infinity")}, allow_nan=True) == b'{"x":Infinity}'
+        
+        # With allow_nan=False
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps([float("NaN"), 1, 2], allow_nan=False)
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps({"x": float("Infinity")}, allow_nan=False)
+
+    def test_allow_nan_with_option(self):
+        """
+        allow_nan works with other options
+        """
+        # Test with SORT_KEYS
+        data = {"b": float("NaN"), "a": 1}
+        assert orjson.dumps(data, allow_nan=True, option=orjson.OPT_SORT_KEYS) == b'{"a":1,"b":NaN}'
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps(data, allow_nan=False, option=orjson.OPT_SORT_KEYS)
+
+    def test_allow_nan_numpy(self):
+        """
+        allow_nan applies to numpy arrays and scalars
+        """
+        numpy = pytest.importorskip("numpy")
+        
+        # Test numpy arrays
+        arr_with_nan = numpy.array([1.0, numpy.nan, 3.0])
+        arr_with_inf = numpy.array([1.0, numpy.inf, -numpy.inf])
+        
+        # With allow_nan=True
+        assert orjson.dumps(arr_with_nan, option=orjson.OPT_SERIALIZE_NUMPY, allow_nan=True) == b'[1.0,NaN,3.0]'
+        assert orjson.dumps(arr_with_inf, option=orjson.OPT_SERIALIZE_NUMPY, allow_nan=True) == b'[1.0,Infinity,-Infinity]'
+        
+        # With allow_nan=False
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps(arr_with_nan, option=orjson.OPT_SERIALIZE_NUMPY, allow_nan=False)
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps(arr_with_inf, option=orjson.OPT_SERIALIZE_NUMPY, allow_nan=False)
+        
+        # Test numpy scalars  
+        assert orjson.dumps(numpy.float64(numpy.nan), option=orjson.OPT_SERIALIZE_NUMPY, allow_nan=True) == b'NaN'
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps(numpy.float64(numpy.nan), option=orjson.OPT_SERIALIZE_NUMPY, allow_nan=False)
+
     def test_int_53(self):
         """
         int 53-bit

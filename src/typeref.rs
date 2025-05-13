@@ -31,6 +31,7 @@ pub struct NumpyTypes {
 
 pub static mut DEFAULT: *mut PyObject = null_mut();
 pub static mut OPTION: *mut PyObject = null_mut();
+pub static mut ALLOW_NAN: *mut PyObject = null_mut();
 
 pub static mut NONE: *mut PyObject = null_mut();
 pub static mut TRUE: *mut PyObject = null_mut();
@@ -195,6 +196,7 @@ fn _init_typerefs_impl() -> bool {
         VALUE_STR = PyUnicode_InternFromString("value\0".as_ptr() as *const c_char);
         DEFAULT = PyUnicode_InternFromString("default\0".as_ptr() as *const c_char);
         OPTION = PyUnicode_InternFromString("option\0".as_ptr() as *const c_char);
+        ALLOW_NAN = PyUnicode_InternFromString("allow_nan\0".as_ptr() as *const c_char);
         JsonEncodeError = pyo3_ffi::PyExc_TypeError;
         Py_INCREF(JsonEncodeError);
         JsonDecodeError = look_up_json_exc();
