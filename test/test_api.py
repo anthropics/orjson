@@ -212,7 +212,7 @@ class TestApi:
         dumps() option out of range high
         """
         with pytest.raises(orjson.JSONEncodeError):
-            orjson.dumps(True, option=1 << 12)
+            orjson.dumps(True, option=1 << 13)
 
     def test_opts_multiple(self):
         """
@@ -286,7 +286,7 @@ class TestApi:
         """
         assert (
             str(inspect.signature(orjson.dumps))
-            == "(obj, /, default=None, option=None)"
+            == "(obj, /, default=None, option=None, allow_nan=True)"
         )
         inspect.signature(orjson.dumps).bind("str")
         inspect.signature(orjson.dumps).bind("str", default=default, option=1)
