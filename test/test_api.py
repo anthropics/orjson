@@ -291,6 +291,8 @@ class TestApi:
         inspect.signature(orjson.dumps).bind("str")
         inspect.signature(orjson.dumps).bind("str", default=default, option=1)
         inspect.signature(orjson.dumps).bind("str", default=None, option=None)
+        inspect.signature(orjson.dumps).bind("str", default=None, option=None, allow_nan=True)
+        inspect.signature(orjson.dumps).bind("str", default=None, option=None, allow_nan=False)
 
     def test_loads_signature(self):
         """
