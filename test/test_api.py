@@ -93,7 +93,7 @@ class TestApi:
         loads() recursion limit at limit mixed
         """
         n = LOADS_RECURSION_LIMIT
-        value = b"[" b'{"key":' * n + b'{"key":true}' + b"}" * n + b"]"
+        value = b'[{"key":' * n + b'{"key":true}' + b"}" * n + b"]"
         pytest.raises(orjson.JSONDecodeError, orjson.loads, value)
 
     def test_loads_recursion_valid_excessive_array(self):
@@ -146,7 +146,7 @@ class TestApi:
         loads() recursion limit at limit mixed pretty
         """
         n = LOADS_RECURSION_LIMIT
-        value = b"[\n  " b'{"key":' * n + b'{"key":true}' + b"}" * n + b"]"
+        value = b'[\n  {"key":' * n + b'{"key":true}' + b"}" * n + b"]"
         pytest.raises(orjson.JSONDecodeError, orjson.loads, value)
 
     def test_loads_recursion_valid_excessive_array_pretty(self):
@@ -291,8 +291,12 @@ class TestApi:
         inspect.signature(orjson.dumps).bind("str")
         inspect.signature(orjson.dumps).bind("str", default=default, option=1)
         inspect.signature(orjson.dumps).bind("str", default=None, option=None)
-        inspect.signature(orjson.dumps).bind("str", default=None, option=None, allow_nan=True)
-        inspect.signature(orjson.dumps).bind("str", default=None, option=None, allow_nan=False)
+        inspect.signature(orjson.dumps).bind(
+            "str", default=None, option=None, allow_nan=True
+        )
+        inspect.signature(orjson.dumps).bind(
+            "str", default=None, option=None, allow_nan=False
+        )
 
     def test_loads_signature(self):
         """
