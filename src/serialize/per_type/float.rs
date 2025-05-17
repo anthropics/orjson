@@ -22,7 +22,7 @@ impl Serialize for FloatSerializer {
     {
         let value = ffi!(PyFloat_AS_DOUBLE(self.ptr));
         if unlikely!(opt_enabled!(self.opts, DISALLOW_NAN)) && !value.is_finite() {
-            Err(serde::ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"))
+            serializer.serialize_none()
         } else {
             serializer.serialize_f64(value)
         }

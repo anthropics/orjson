@@ -288,11 +288,21 @@ impl NumpyArray {
     }
 
     fn shape(&self) -> &[isize] {
-        slice!((*self.array).shape as *const isize, self.dimensions())
+        let dims = self.dimensions();
+        if dims == 0 {
+            &[]
+        } else {
+            slice!((*self.array).shape as *const isize, dims)
+        }
     }
 
     fn strides(&self) -> &[isize] {
-        slice!((*self.array).strides as *const isize, self.dimensions())
+        let dims = self.dimensions();
+        if dims == 0 {
+            &[]
+        } else {
+            slice!((*self.array).strides as *const isize, dims)
+        }
     }
 }
 
@@ -319,14 +329,14 @@ impl Serialize for NumpyArray {
                 ItemType::F64 => {
                     let value = unsafe { *(self.data() as *const f64) };
                     if self.opts & DISALLOW_NAN != 0 && !value.is_finite() {
-                        return Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"));
+                        return serializer.serialize_none();
                     }
                     DataTypeF64 { obj: value }.serialize(serializer)
                 },
                 ItemType::F32 => {
                     let value = unsafe { *(self.data() as *const f32) };
                     if self.opts & DISALLOW_NAN != 0 && !value.is_finite() {
-                        return Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"));
+                        return serializer.serialize_none();
                     }
                     DataTypeF32 { obj: value }.serialize(serializer)
                 },
@@ -364,9 +374,10 @@ impl Serialize for NumpyArray {
                         let mut seq = serializer.serialize_seq(None).unwrap();
                         for &each in data.iter() {
                             if !each.is_finite() {
-                                return Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"));
+                                seq.serialize_element(&Option::<f64>::None).unwrap();
+                            } else {
+                                seq.serialize_element(&DataTypeF64 { obj: each }).unwrap();
                             }
-                            seq.serialize_element(&DataTypeF64 { obj: each }).unwrap();
                         }
                         seq.end()
                     } else {
@@ -381,9 +392,10 @@ impl Serialize for NumpyArray {
                         let mut seq = serializer.serialize_seq(None).unwrap();
                         for &each in data.iter() {
                             if !each.is_finite() {
-                                return Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"));
+                                seq.serialize_element(&Option::<f32>::None).unwrap();
+                            } else {
+                                seq.serialize_element(&DataTypeF32 { obj: each }).unwrap();
                             }
-                            seq.serialize_element(&DataTypeF32 { obj: each }).unwrap();
                         }
                         seq.end()
                     } else {
@@ -1173,7 +1185,7 @@ impl NumpyFloat32 {
         S: Serializer,
     {
         if opts & DISALLOW_NAN != 0 && !self.value.is_finite() {
-            Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"))
+            serializer.serialize_none()
         } else {
             serializer.serialize_f32(self.value)
         }
@@ -1203,7 +1215,7 @@ impl NumpyFloat64 {
         S: Serializer,
     {
         if opts & DISALLOW_NAN != 0 && !self.value.is_finite() {
-            Err(ser::Error::custom("Float values that are Infinity or NaN cannot be JSON encoded"))
+            serializer.serialize_none()
         } else {
             serializer.serialize_f64(self.value)
         }

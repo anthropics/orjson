@@ -387,14 +387,11 @@ class TestType:
 
     def test_allow_nan_false(self):
         """
-        allow_nan=False raises JSONEncodeError for NaN and Infinity
+        allow_nan=False serializes NaN and Infinity as null
         """
-        with pytest.raises(orjson.JSONEncodeError):
-            orjson.dumps(float("NaN"), allow_nan=False)
-        with pytest.raises(orjson.JSONEncodeError):
-            orjson.dumps(float("Infinity"), allow_nan=False)
-        with pytest.raises(orjson.JSONEncodeError):
-            orjson.dumps(float("-Infinity"), allow_nan=False)
+        assert orjson.dumps(float("NaN"), allow_nan=False) == b"null"
+        assert orjson.dumps(float("Infinity"), allow_nan=False) == b"null"
+        assert orjson.dumps(float("-Infinity"), allow_nan=False) == b"null"
 
     def test_allow_nan_in_structures(self):
         """
@@ -407,10 +404,8 @@ class TestType:
         )
 
         # With allow_nan=False
-        with pytest.raises(orjson.JSONEncodeError):
-            orjson.dumps([float("NaN"), 1, 2], allow_nan=False)
-        with pytest.raises(orjson.JSONEncodeError):
-            orjson.dumps({"x": float("Infinity")}, allow_nan=False)
+        assert orjson.dumps([float("NaN"), 1, 2], allow_nan=False) == b"[null,1,2]"
+        assert orjson.dumps({"x": float("Infinity")}, allow_nan=False) == b'{"x":null}'
 
     def test_allow_nan_with_option(self):
         """
@@ -422,8 +417,10 @@ class TestType:
             orjson.dumps(data, allow_nan=True, option=orjson.OPT_SORT_KEYS)
             == b'{"a":1,"b":NaN}'
         )
-        with pytest.raises(orjson.JSONEncodeError):
+        assert (
             orjson.dumps(data, allow_nan=False, option=orjson.OPT_SORT_KEYS)
+            == b'{"a":1,"b":null}'
+        )
 
     def test_allow_nan_numpy(self):
         """
@@ -450,14 +447,18 @@ class TestType:
         )
 
         # With allow_nan=False
-        with pytest.raises(orjson.JSONEncodeError):
+        assert (
             orjson.dumps(
                 arr_with_nan, option=orjson.OPT_SERIALIZE_NUMPY, allow_nan=False
             )
-        with pytest.raises(orjson.JSONEncodeError):
+            == b"[1.0,null,3.0]"
+        )
+        assert (
             orjson.dumps(
                 arr_with_inf, option=orjson.OPT_SERIALIZE_NUMPY, allow_nan=False
             )
+            == b"[1.0,null,null]"
+        )
 
         # Test numpy scalars
         assert (
@@ -468,12 +469,14 @@ class TestType:
             )
             == b"NaN"
         )
-        with pytest.raises(orjson.JSONEncodeError):
+        assert (
             orjson.dumps(
                 numpy.float64(numpy.nan),
                 option=orjson.OPT_SERIALIZE_NUMPY,
                 allow_nan=False,
             )
+            == b"null"
+        )
 
     def test_int_53(self):
         """
