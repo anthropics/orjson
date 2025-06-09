@@ -288,11 +288,19 @@ impl NumpyArray {
     }
 
     fn shape(&self) -> &[isize] {
-        slice!((*self.array).shape as *const isize, self.dimensions())
+        if self.dimensions() == 0 {
+            &[]
+        } else {
+            slice!((*self.array).shape as *const isize, self.dimensions())
+        }
     }
 
     fn strides(&self) -> &[isize] {
-        slice!((*self.array).strides as *const isize, self.dimensions())
+        if self.dimensions() == 0 {
+            &[]
+        } else {
+            slice!((*self.array).strides as *const isize, self.dimensions())
+        }
     }
 }
 
@@ -316,9 +324,31 @@ impl Serialize for NumpyArray {
         if self.is_zero_dimensional {
             // For zero-dimensional arrays, serialize the single value directly
             match self.kind {
-                ItemType::F64 => DataTypeF64 { obj: unsafe { *(self.data() as *const f64) } }.serialize(serializer),
-                ItemType::F32 => DataTypeF32 { obj: unsafe { *(self.data() as *const f32) } }.serialize(serializer),
-                ItemType::F16 => DataTypeF16 { obj: unsafe { *(self.data() as *const u16) } }.serialize(serializer),
+                ItemType::F64 => {
+                    let value = unsafe { *(self.data() as *const f64) };
+                    if self.opts & SANITIZE_NAN != 0 && (value.is_nan() || value.is_infinite()) {
+                        serializer.serialize_unit()
+                    } else {
+                        DataTypeF64 { obj: value }.serialize(serializer)
+                    }
+                },
+                ItemType::F32 => {
+                    let value = unsafe { *(self.data() as *const f32) };
+                    if self.opts & SANITIZE_NAN != 0 && (value.is_nan() || value.is_infinite()) {
+                        serializer.serialize_unit()
+                    } else {
+                        DataTypeF32 { obj: value }.serialize(serializer)
+                    }
+                },
+                ItemType::F16 => {
+                    let as_f16 = half::f16::from_bits(unsafe { *(self.data() as *const u16) });
+                    let value = as_f16.to_f32();
+                    if self.opts & SANITIZE_NAN != 0 && (value.is_nan() || value.is_infinite()) {
+                        serializer.serialize_unit()
+                    } else {
+                        DataTypeF16 { obj: unsafe { *(self.data() as *const u16) } }.serialize(serializer)
+                    }
+                },
                 ItemType::U64 => DataTypeU64 { obj: unsafe { *(self.data() as *const u64) } }.serialize(serializer),
                 ItemType::U32 => DataTypeU32 { obj: unsafe { *(self.data() as *const u32) } }.serialize(serializer),
                 ItemType::U16 => DataTypeU16 { obj: unsafe { *(self.data() as *const u16) } }.serialize(serializer),
@@ -346,15 +376,15 @@ impl Serialize for NumpyArray {
         } else {
             match self.kind {
                 ItemType::F64 => {
-                    NumpyF64Array::new(slice!(self.data() as *const f64, self.num_items()))
+                    NumpyF64Array::new(slice!(self.data() as *const f64, self.num_items()), self.opts)
                         .serialize(serializer)
                 }
                 ItemType::F32 => {
-                    NumpyF32Array::new(slice!(self.data() as *const f32, self.num_items()))
+                    NumpyF32Array::new(slice!(self.data() as *const f32, self.num_items()), self.opts)
                         .serialize(serializer)
                 }
                 ItemType::F16 => {
-                    NumpyF16Array::new(slice!(self.data() as *const u16, self.num_items()))
+                    NumpyF16Array::new(slice!(self.data() as *const u16, self.num_items()), self.opts)
                         .serialize(serializer)
                 }
                 ItemType::U64 => {
@@ -404,14 +434,14 @@ impl Serialize for NumpyArray {
     }
 }
 
-#[repr(transparent)]
 struct NumpyF64Array<'a> {
     data: &'a [f64],
+    opts: Opt,
 }
 
 impl<'a> NumpyF64Array<'a> {
-    fn new(data: &'a [f64]) -> Self {
-        Self { data }
+    fn new(data: &'a [f64], opts: Opt) -> Self {
+        Self { data, opts }
     }
 }
 
@@ -424,7 +454,11 @@ impl<'a> Serialize for NumpyF64Array<'a> {
     {
         let mut seq = serializer.serialize_seq(None).unwrap();
         for &each in self.data.iter() {
-            seq.serialize_element(&DataTypeF64 { obj: each }).unwrap();
+            if self.opts & SANITIZE_NAN != 0 && (each.is_nan() || each.is_infinite()) {
+                seq.serialize_element(&()).unwrap();
+            } else {
+                seq.serialize_element(&DataTypeF64 { obj: each }).unwrap();
+            }
         }
         seq.end()
     }
@@ -445,14 +479,14 @@ impl Serialize for DataTypeF64 {
     }
 }
 
-#[repr(transparent)]
 struct NumpyF32Array<'a> {
     data: &'a [f32],
+    opts: Opt,
 }
 
 impl<'a> NumpyF32Array<'a> {
-    fn new(data: &'a [f32]) -> Self {
-        Self { data }
+    fn new(data: &'a [f32], opts: Opt) -> Self {
+        Self { data, opts }
     }
 }
 
@@ -465,7 +499,11 @@ impl<'a> Serialize for NumpyF32Array<'a> {
     {
         let mut seq = serializer.serialize_seq(None).unwrap();
         for &each in self.data.iter() {
-            seq.serialize_element(&DataTypeF32 { obj: each }).unwrap();
+            if self.opts & SANITIZE_NAN != 0 && (each.is_nan() || each.is_infinite()) {
+                seq.serialize_element(&()).unwrap();
+            } else {
+                seq.serialize_element(&DataTypeF32 { obj: each }).unwrap();
+            }
         }
         seq.end()
     }
@@ -486,14 +524,14 @@ impl Serialize for DataTypeF32 {
     }
 }
 
-#[repr(transparent)]
 struct NumpyF16Array<'a> {
     data: &'a [u16],
+    opts: Opt,
 }
 
 impl<'a> NumpyF16Array<'a> {
-    fn new(data: &'a [u16]) -> Self {
-        Self { data }
+    fn new(data: &'a [u16], opts: Opt) -> Self {
+        Self { data, opts }
     }
 }
 
@@ -506,7 +544,17 @@ impl<'a> Serialize for NumpyF16Array<'a> {
     {
         let mut seq = serializer.serialize_seq(None).unwrap();
         for &each in self.data.iter() {
-            seq.serialize_element(&DataTypeF16 { obj: each }).unwrap();
+            if self.opts & SANITIZE_NAN != 0 {
+                let as_f16 = half::f16::from_bits(each);
+                let value = as_f16.to_f32();
+                if value.is_nan() || value.is_infinite() {
+                    seq.serialize_element(&()).unwrap();
+                } else {
+                    seq.serialize_element(&DataTypeF16 { obj: each }).unwrap();
+                }
+            } else {
+                seq.serialize_element(&DataTypeF16 { obj: each }).unwrap();
+            }
         }
         seq.end()
     }
@@ -921,11 +969,27 @@ impl Serialize for NumpyScalar {
             let scalar_types =
                 unsafe { NUMPY_TYPES.get_or_init(load_numpy_types).unwrap().as_ref() };
             if ob_type == scalar_types.float64 {
-                (*(self.ptr as *mut NumpyFloat64)).serialize(serializer)
+                let value = (*(self.ptr as *mut NumpyFloat64)).value;
+                if self.opts & SANITIZE_NAN != 0 && (value.is_nan() || value.is_infinite()) {
+                    serializer.serialize_unit()
+                } else {
+                    serializer.serialize_f64(value)
+                }
             } else if ob_type == scalar_types.float32 {
-                (*(self.ptr as *mut NumpyFloat32)).serialize(serializer)
+                let value = (*(self.ptr as *mut NumpyFloat32)).value;
+                if self.opts & SANITIZE_NAN != 0 && (value.is_nan() || value.is_infinite()) {
+                    serializer.serialize_unit()
+                } else {
+                    serializer.serialize_f32(value)
+                }
             } else if ob_type == scalar_types.float16 {
-                (*(self.ptr as *mut NumpyFloat16)).serialize(serializer)
+                let as_f16 = half::f16::from_bits((*(self.ptr as *mut NumpyFloat16)).value);
+                let value = as_f16.to_f32();
+                if self.opts & SANITIZE_NAN != 0 && (value.is_nan() || value.is_infinite()) {
+                    serializer.serialize_unit()
+                } else {
+                    serializer.serialize_f32(value)
+                }
             } else if ob_type == scalar_types.int64 {
                 (*(self.ptr as *mut NumpyInt64)).serialize(serializer)
             } else if ob_type == scalar_types.int32 {
