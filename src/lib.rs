@@ -145,6 +145,7 @@ pub unsafe extern "C" fn orjson_init_exec(mptr: *mut PyObject) -> c_int {
             "OPT_PASSTHROUGH_SUBCLASS\0",
             opt::PASSTHROUGH_SUBCLASS
         );
+        opt!(mptr, "OPT_SANITIZE_NAN\0", opt::SANITIZE_NAN);
         opt!(mptr, "OPT_SERIALIZE_DATACLASS\0", opt::SERIALIZE_DATACLASS);
         opt!(mptr, "OPT_SERIALIZE_NUMPY\0", opt::SERIALIZE_NUMPY);
         opt!(mptr, "OPT_SERIALIZE_UUID\0", opt::SERIALIZE_UUID);
