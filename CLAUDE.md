@@ -1,6 +1,7 @@
 # orjson Development Guide
 
 This is Anthropic's custom fork of orjson with modifications for internal use.
+This file distills Anthropic-specific notes about testing and building the fork from go/orjson, which should remain the canonical source of such information.
 
 ## Key Modifications from Upstream
 - Re-enabled NaN and Infinity support
