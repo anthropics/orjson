@@ -69,6 +69,8 @@ smallvec = { version = "^1.11", default-features = false, features = ["union", "
 unwinding = { version = "^0.2.4", default-features = false, features = ["unwinder"], optional = true }
 uuid = { version = "1", default-features = false }
 xxhash-rust = { version = "^0.8", default-features = false, features = ["xxh3"] }
+zip = { version = "2", default-features = false, features = ["zstd"] }
+zstd = { version = "0.13", default-features = false }
 
 [build-dependencies]
 cc = { version = "=1.2.1" } # aarch64-linux-musl link errors

@@ -25,6 +25,7 @@ mod util;
 mod alloc;
 mod deserialize;
 mod ffi;
+mod logitnpz;
 mod opt;
 mod serialize;
 mod str;
@@ -154,6 +155,81 @@ pub unsafe extern "C" fn orjson_init_exec(mptr: *mut PyObject) -> c_int {
 
         add!(mptr, "JSONDecodeError\0", typeref::JsonDecodeError);
         add!(mptr, "JSONEncodeError\0", typeref::JsonEncodeError);
+
+        // logitnpz functions
+        {
+            let doc = "logitnpz_save(path, arrays, compression_level=3)\n--\n\nSave numpy arrays to a logitnpz file (zip with zstd compression).\0";
+            let wrapped = PyMethodDef {
+                ml_name: "logitnpz_save\0".as_ptr() as *const c_char,
+                ml_meth: PyMethodDefPointer {
+                    #[cfg(Py_3_10)]
+                    PyCFunctionFastWithKeywords: logitnpz::logitnpz_save,
+                    #[cfg(not(Py_3_10))]
+                    _PyCFunctionFastWithKeywords: logitnpz::logitnpz_save,
+                },
+                ml_flags: pyo3_ffi::METH_FASTCALL | METH_KEYWORDS,
+                ml_doc: doc.as_ptr() as *const c_char,
+            };
+            let func = PyCFunction_NewEx(
+                Box::into_raw(Box::new(wrapped)),
+                null_mut(),
+                PyUnicode_InternFromString("orjson\0".as_ptr() as *const c_char),
+            );
+            add!(mptr, "logitnpz_save\0", func);
+        }
+
+        {
+            let doc = "logitnpz_load(path)\n--\n\nLoad numpy arrays from a logitnpz file.\0";
+            let wrapped = PyMethodDef {
+                ml_name: "logitnpz_load\0".as_ptr() as *const c_char,
+                ml_meth: PyMethodDefPointer { PyCFunction: logitnpz::logitnpz_load },
+                ml_flags: METH_O,
+                ml_doc: doc.as_ptr() as *const c_char,
+            };
+            let func = PyCFunction_NewEx(
+                Box::into_raw(Box::new(wrapped)),
+                null_mut(),
+                PyUnicode_InternFromString("orjson\0".as_ptr() as *const c_char),
+            );
+            add!(mptr, "logitnpz_load\0", func);
+        }
+
+        {
+            let doc = "logitnpz_dumps(arrays, compression_level=3)\n--\n\nSerialize numpy arrays to bytes in logitnpz format.\0";
+            let wrapped = PyMethodDef {
+                ml_name: "logitnpz_dumps\0".as_ptr() as *const c_char,
+                ml_meth: PyMethodDefPointer {
+                    #[cfg(Py_3_10)]
+                    PyCFunctionFastWithKeywords: logitnpz::logitnpz_dumps,
+                    #[cfg(not(Py_3_10))]
+                    _PyCFunctionFastWithKeywords: logitnpz::logitnpz_dumps,
+                },
+                ml_flags: pyo3_ffi::METH_FASTCALL | METH_KEYWORDS,
+                ml_doc: doc.as_ptr() as *const c_char,
+            };
+            let func = PyCFunction_NewEx(
+                Box::into_raw(Box::new(wrapped)),
+                null_mut(),
+                PyUnicode_InternFromString("orjson\0".as_ptr() as *const c_char),
+            );
+            add!(mptr, "logitnpz_dumps\0", func);
+        }
+
+        {
+            let doc = "logitnpz_loads(data)\n--\n\nDeserialize numpy arrays from bytes in logitnpz format.\0";
+            let wrapped = PyMethodDef {
+                ml_name: "logitnpz_loads\0".as_ptr() as *const c_char,
+                ml_meth: PyMethodDefPointer { PyCFunction: logitnpz::logitnpz_loads },
+                ml_flags: METH_O,
+                ml_doc: doc.as_ptr() as *const c_char,
+            };
+            let func = PyCFunction_NewEx(
+                Box::into_raw(Box::new(wrapped)),
+                null_mut(),
+                PyUnicode_InternFromString("orjson\0".as_ptr() as *const c_char),
+            );
+            add!(mptr, "logitnpz_loads\0", func);
+        }
 
         0
     }
