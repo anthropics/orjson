@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// Copyright ijl (2018-2025)
 
 use crate::serialize::error::SerializeError;
 use crate::serialize::serializer::PyObjectSerializer;
@@ -6,7 +7,7 @@ use crate::serialize::serializer::PyObjectSerializer;
 use serde::ser::{Serialize, Serializer};
 
 #[repr(transparent)]
-pub struct DefaultSerializer<'a> {
+pub(crate) struct DefaultSerializer<'a> {
     previous: &'a PyObjectSerializer,
 }
 
@@ -16,7 +17,7 @@ impl<'a> DefaultSerializer<'a> {
     }
 }
 
-impl<'a> Serialize for DefaultSerializer<'a> {
+impl Serialize for DefaultSerializer<'_> {
     #[cold]
     #[inline(never)]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -25,25 +26,29 @@ impl<'a> Serialize for DefaultSerializer<'a> {
     {
         match self.previous.default {
             Some(callable) => {
-                if unlikely!(self.previous.state.default_calls_limit()) {
+                if self.previous.state.default_calls_limit() {
+                    cold_path!();
                     err!(SerializeError::DefaultRecursionLimit)
                 }
                 #[cfg(not(Py_3_10))]
                 let default_obj = ffi!(PyObject_CallFunctionObjArgs(
                     callable.as_ptr(),
                     self.previous.ptr,
-                    core::ptr::null_mut() as *mut pyo3_ffi::PyObject
+                    core::ptr::null_mut::<crate::ffi::PyObject>()
                 ));
                 #[cfg(Py_3_10)]
+                #[allow(clippy::cast_sign_loss)]
+                let nargs = ffi!(PyVectorcall_NARGS(1)) as usize;
+                #[cfg(Py_3_10)]
                 let default_obj = unsafe {
-                    pyo3_ffi::PyObject_Vectorcall(
+                    crate::ffi::PyObject_Vectorcall(
                         callable.as_ptr(),
-                        core::ptr::addr_of!(self.previous.ptr),
-                        pyo3_ffi::PyVectorcall_NARGS(1) as usize,
+                        &raw const self.previous.ptr,
+                        nargs,
                         core::ptr::null_mut(),
                     )
                 };
-                if unlikely!(default_obj.is_null()) {
+                if default_obj.is_null() {
                     err!(SerializeError::UnsupportedType(nonnull!(self.previous.ptr)))
                 } else {
                     let res = PyObjectSerializer::new(

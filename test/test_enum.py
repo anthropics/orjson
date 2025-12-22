@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# Copyright ijl (2020-2025)
 
 import datetime
 import enum
@@ -51,7 +52,7 @@ class UnspecifiedEnum(enum.Enum):
     A = "a"
     B = 1
     C = FloatEnum.ONE
-    D = {"d": IntEnum.ONE}
+    D = {"d": IntEnum.ONE}  # noqa: RUF012
     E = Custom("c")
     F = datetime.datetime(1970, 1, 1)
 

@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# Copyright ijl (2018-2025)
 
 import pytest
 
 import orjson
 
-from .util import needs_data, read_fixture_bytes
+from .util import SUPPORTS_MEMORYVIEW, needs_data, read_fixture_bytes
 
 
 @needs_data
@@ -15,8 +16,9 @@ class TestJSONTestSuiteParsing:
             orjson.loads(data)
         with pytest.raises(exc):
             orjson.loads(bytearray(data))
-        with pytest.raises(exc):
-            orjson.loads(memoryview(data))
+        if SUPPORTS_MEMORYVIEW:
+            with pytest.raises(exc):
+                orjson.loads(memoryview(data))
         try:
             decoded = data.decode("utf-8")
         except UnicodeDecodeError:
@@ -29,7 +31,8 @@ class TestJSONTestSuiteParsing:
         data = read_fixture_bytes(filename, "parsing")
         orjson.loads(data)
         orjson.loads(bytearray(data))
-        orjson.loads(memoryview(data))
+        if SUPPORTS_MEMORYVIEW:
+            orjson.loads(memoryview(data))
         orjson.loads(data.decode("utf-8"))
 
     def test_y_array_arraysWithSpace(self):
@@ -1135,7 +1138,7 @@ class TestJSONTestSuiteParsing:
         n_object_lone_continuation_byte_in_key_and_trailing_comma.json
         """
         self._run_fail_json(
-            "n_object_lone_continuation_byte_in_key_and_trailing_comma.json"
+            "n_object_lone_continuation_byte_in_key_and_trailing_comma.json",
         )
 
     def test_n_object_missing_col(self):

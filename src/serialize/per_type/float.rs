@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// Copyright ijl (2018-2025)
 
 use serde::ser::{Serialize, Serializer};
 
 #[repr(transparent)]
-pub struct FloatSerializer {
-    ptr: *mut pyo3_ffi::PyObject,
+pub(crate) struct FloatSerializer {
+    ptr: *mut crate::ffi::PyObject,
 }
 
 impl FloatSerializer {
-    pub fn new(ptr: *mut pyo3_ffi::PyObject) -> Self {
+    pub fn new(ptr: *mut crate::ffi::PyObject) -> Self {
         FloatSerializer { ptr: ptr }
     }
 }

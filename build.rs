@@ -1,79 +1,85 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
-
-use std::env;
+// Copyright ijl (2021-2025)
 
 fn main() {
+    let python_config = pyo3_build_config::get();
+
+    if python_config.is_free_threaded() && std::env::var("ORJSON_BUILD_FREETHREADED").is_err() {
+        not_supported("free-threaded Python")
+    }
+
+    for cfg in python_config.build_script_outputs() {
+        println!("{cfg}");
+    }
+
+    #[allow(unused_variables)]
+    let is_64_bit_python = matches!(python_config.pointer_width, Some(64));
+
+    match python_config.implementation {
+        pyo3_build_config::PythonImplementation::CPython => {
+            println!("cargo:rustc-cfg=CPython");
+            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+            if is_64_bit_python {
+                println!("cargo:rustc-cfg=feature=\"inline_int\"");
+            }
+        }
+        pyo3_build_config::PythonImplementation::GraalPy => not_supported("GraalPy"),
+        pyo3_build_config::PythonImplementation::PyPy => not_supported("PyPy"),
+    }
+
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=include/yyjson/*");
     println!("cargo:rerun-if-env-changed=CC");
     println!("cargo:rerun-if-env-changed=CFLAGS");
     println!("cargo:rerun-if-env-changed=LDFLAGS");
-    println!("cargo:rerun-if-env-changed=ORJSON_DISABLE_AVX512");
-    println!("cargo:rerun-if-env-changed=ORJSON_DISABLE_SIMD");
-    println!("cargo:rerun-if-env-changed=ORJSON_DISABLE_YYJSON");
+    println!("cargo:rerun-if-env-changed=ORJSON_BUILD_FREETHREADED");
     println!("cargo:rerun-if-env-changed=RUSTFLAGS");
-    println!("cargo:rustc-check-cfg=cfg(intrinsics)");
+    println!("cargo:rustc-check-cfg=cfg(cold_path)");
+    println!("cargo:rustc-check-cfg=cfg(CPython)");
+    println!("cargo:rustc-check-cfg=cfg(GraalPy)");
     println!("cargo:rustc-check-cfg=cfg(optimize)");
     println!("cargo:rustc-check-cfg=cfg(Py_3_10)");
     println!("cargo:rustc-check-cfg=cfg(Py_3_11)");
     println!("cargo:rustc-check-cfg=cfg(Py_3_12)");
     println!("cargo:rustc-check-cfg=cfg(Py_3_13)");
     println!("cargo:rustc-check-cfg=cfg(Py_3_14)");
-    println!("cargo:rustc-check-cfg=cfg(Py_3_8)");
+    println!("cargo:rustc-check-cfg=cfg(Py_3_15)");
     println!("cargo:rustc-check-cfg=cfg(Py_3_9)");
     println!("cargo:rustc-check-cfg=cfg(Py_GIL_DISABLED)");
+    println!("cargo:rustc-check-cfg=cfg(PyPy)");
     println!("cargo:rustc-check-cfg=cfg(yyjson_allow_inf_and_nan)");
 
-    let python_config = pyo3_build_config::get();
-    for cfg in python_config.build_script_outputs() {
-        println!("{cfg}");
+    #[cfg(all(target_arch = "x86_64", not(target_os = "macos")))]
+    if version_check::is_min_version("1.89.0").unwrap_or(false) && is_64_bit_python {
+        println!("cargo:rustc-cfg=feature=\"avx512\"");
     }
 
-    if let Some(true) = version_check::supports_feature("core_intrinsics") {
-        println!("cargo:rustc-cfg=feature=\"intrinsics\"");
+    #[cfg(target_arch = "aarch64")]
+    if version_check::supports_feature("portable_simd").unwrap_or(false) {
+        println!("cargo:rustc-cfg=feature=\"generic_simd\"");
     }
 
-    if let Some(true) = version_check::supports_feature("optimize_attribute") {
+    if version_check::supports_feature("cold_path").unwrap_or(false) {
+        println!("cargo:rustc-cfg=feature=\"cold_path\"");
+    }
+
+    if version_check::supports_feature("optimize_attribute").unwrap_or(false) {
         println!("cargo:rustc-cfg=feature=\"optimize\"");
     }
 
-    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-    if env::var("ORJSON_DISABLE_SIMD").is_err() {
-        // auto build unstable SIMD on nightly
-        if let Some(true) = version_check::supports_feature("portable_simd") {
-            println!("cargo:rustc-cfg=feature=\"unstable-simd\"");
-        }
-        // auto build AVX512 on x86-64-v4 or supporting native targets
-        #[cfg(all(target_arch = "x86_64", target_feature = "avx512vl"))]
-        if let Some(true) = version_check::supports_feature("stdarch_x86_avx512") {
-            if env::var("ORJSON_DISABLE_AVX512").is_err() {
-                println!("cargo:rustc-cfg=feature=\"avx512\"");
-            }
-        }
-    }
+    cc::Build::new()
+        .file("include/yyjson/yyjson.c")
+        .include("include/yyjson")
+        .define("YYJSON_DISABLE_UTF8_VALIDATION", "1")
+        .define("YYJSON_DISABLE_UTILS", "1")
+        .define("YYJSON_DISABLE_WRITER", "1")
+        .compile("yyjson");
 
-    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-    if matches!(python_config.pointer_width, Some(64)) {
-        println!("cargo:rustc-cfg=feature=\"inline_int\"");
-    }
+    println!("cargo:rustc-cfg=yyjson_allow_inf_and_nan");
+}
 
-    if env::var("ORJSON_DISABLE_YYJSON").is_ok() {
-        if env::var("CARGO_FEATURE_YYJSON").is_ok() {
-            panic!("ORJSON_DISABLE_YYJSON and --features=yyjson both enabled.")
-        }
-    } else {
-        // Compile yyjson
-        cc::Build::new()
-            .file("include/yyjson/yyjson.c")
-            .compile("yyjson");
-
-        // Link against Python
-        let python_config = pyo3_build_config::get();
-        for cfg in python_config.build_script_outputs() {
-            println!("{cfg}");
-        }
-
-        println!("cargo:rustc-cfg=feature=\"yyjson\"");
-        println!("cargo:rustc-cfg=yyjson_allow_inf_and_nan");
-    }
+fn not_supported(flavor: &str) {
+    let version = env!("CARGO_PKG_VERSION");
+    eprintln!("\n\n\norjson v{version} does not support {flavor}\n\n\n");
+    std::process::exit(1);
 }

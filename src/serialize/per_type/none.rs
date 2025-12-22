@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// Copyright ijl (2018-2025)
 
 use serde::ser::{Serialize, Serializer};
 
-pub struct NoneSerializer;
+pub(crate) struct NoneSerializer;
 
 impl NoneSerializer {
     pub const fn new() -> Self {

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# Copyright ijl (2018-2025)
 
 import sys
 import traceback
@@ -38,7 +40,7 @@ def test_func(n):
         assert sorted(orjson.loads(orjson.dumps(DATA)), key=itemgetter("id")) == DATA
     except Exception:
         traceback.print_exc()
-        print("thread %s: %s dumps, loads ERROR" % (get_ident(), n))
+        print(f"thread {get_ident()}: {n} dumps, loads ERROR")
 
 
 with ThreadPoolExecutor(max_workers=4) as executor:

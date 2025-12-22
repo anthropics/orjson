@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# Copyright ijl (2020-2025), Aarni Koskela (2021)
 
 import datetime
 import io
@@ -13,14 +14,15 @@ from tabulate import tabulate
 
 import orjson
 
-os.sched_setaffinity(os.getpid(), {0, 1})
+if hasattr(os, "sched_setaffinity"):
+    os.sched_setaffinity(os.getpid(), {0, 1})
 
 data_as_obj = []
 for year in range(1920, 2020):
     start = datetime.date(year, 1, 1)
     array = [
         (int(mktime((start + datetime.timedelta(days=i)).timetuple())), i + 1)
-        for i in range(0, 365)
+        for i in range(365)
     ]
     array.append(("other", 0))
     random.shuffle(array)
@@ -77,14 +79,18 @@ for lib_name in LIBRARIES:
         )
         time_as_obj_sorted = timeit(
             lambda: orjson.dumps(
-                data_as_obj, None, orjson.OPT_NON_STR_KEYS | orjson.OPT_SORT_KEYS
+                data_as_obj,
+                None,
+                orjson.OPT_NON_STR_KEYS | orjson.OPT_SORT_KEYS,
             ),
             number=ITERATIONS,
         )
         correct = test_correctness(
             orjson.dumps(
-                data_as_obj, None, orjson.OPT_NON_STR_KEYS | orjson.OPT_SORT_KEYS
-            )
+                data_as_obj,
+                None,
+                orjson.OPT_NON_STR_KEYS | orjson.OPT_SORT_KEYS,
+            ),
         )
     else:
         raise NotImplementedError
@@ -102,7 +108,7 @@ for lib_name in LIBRARIES:
             f"{time_as_str:,.2f}" if time_as_str else "",
             f"{time_as_obj:,.2f}" if time_as_obj else "",
             f"{time_as_obj_sorted:,.2f}" if time_as_obj_sorted else "",
-        )
+        ),
     )
 
 buf = io.StringIO()

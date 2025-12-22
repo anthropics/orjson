@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# Copyright ijl (2019-2025)
 
 import collections
 import io
@@ -56,7 +57,7 @@ def test_passed(libname, fixture):
     try:
         passed.append(loads(fixture) == orjson.loads(fixture))
         passed.append(
-            loads(fixture.decode("utf-8")) == orjson.loads(fixture.decode("utf-8"))
+            loads(fixture.decode("utf-8")) == orjson.loads(fixture.decode("utf-8")),
         )
     except Exception:
         passed.append(False)
@@ -138,7 +139,7 @@ for filename in FILENAMES:
     tab_results.append(entry)
 
 buf = io.StringIO()
-buf.write(tabulate(tab_results, ["Fixture"] + LIBRARIES, tablefmt="github"))
+buf.write(tabulate(tab_results, ["Fixture", *LIBRARIES], tablefmt="github"))
 buf.write("\n")
 print(buf.getvalue())
 
@@ -157,7 +158,7 @@ buf.write(
             "Valid JSON documents not deserialized",
         ],
         tablefmt="github",
-    )
+    ),
 )
 buf.write("\n")
 print(buf.getvalue())

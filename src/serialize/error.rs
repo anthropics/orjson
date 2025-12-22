@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// Copyright ijl (2021-2025)
 
 use core::ffi::CStr;
 use core::ptr::NonNull;
 
-pub enum SerializeError {
+pub(crate) enum SerializeError {
     DatetimeLibraryUnsupported,
     DefaultRecursionLimit,
     Integer53Bits,
@@ -20,13 +21,13 @@ pub enum SerializeError {
     NumpyNotNativeEndian,
     NumpyUnsupportedDatatype,
     PyTorchTensorConversion,
-    UnsupportedType(NonNull<pyo3_ffi::PyObject>),
+    UnsupportedType(NonNull<crate::ffi::PyObject>),
 }
 
-impl std::fmt::Display for SerializeError {
+impl core::fmt::Display for SerializeError {
     #[cold]
     #[cfg_attr(feature = "optimize", optimize(size))]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match *self {
             SerializeError::DatetimeLibraryUnsupported => write!(
                 f,
@@ -67,7 +68,7 @@ impl std::fmt::Display for SerializeError {
             SerializeError::UnsupportedType(ptr) => {
                 let name =
                     unsafe { CStr::from_ptr((*ob_type!(ptr.as_ptr())).tp_name).to_string_lossy() };
-                write!(f, "Type is not JSON serializable: {}", name)
+                write!(f, "Type is not JSON serializable: {name}")
             }
         }
     }

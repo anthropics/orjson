@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# Copyright ijl (2019-2025)
 
 import pytest
 
@@ -46,7 +47,7 @@ class TestJSONTestSuiteTransform:
         """
         # cannot serialize due to range
         assert orjson.loads(_read_file("number_10000000000000000999.json")) == [
-            10000000000000000999
+            10000000000000000999,
         ]
 
     def test_number_1000000000000000(self):

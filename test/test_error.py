@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# Copyright ijl (2021-2025), Eric Jolibois (2021), o.ermakov (2023)
 
 import json
 
@@ -48,7 +49,7 @@ class TestJsonDecodeError:
         with pytest.raises(orjson.JSONDecodeError) as json_exc_info:
             orjson.loads("")
         assert str(json_exc_info.value).startswith(
-            "Input is a zero-length, empty document:"
+            "Input is a zero-length, empty document:",
         )
 
     def test_ascii(self):
@@ -124,7 +125,7 @@ def default_systemerror(obj):
 
 
 def default_importerror(obj):
-    import doesnotexist
+    import doesnotexist  # noqa: PLC0415
 
     assert doesnotexist
 

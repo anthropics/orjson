@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# Copyright ijl (2018-2025)
 
 import io
 import sys
@@ -6,6 +7,8 @@ import sys
 import pytest
 
 import orjson
+
+from .util import SUPPORTS_MEMORYVIEW
 
 
 class TestType:
@@ -240,7 +243,9 @@ class TestType:
         pytest.raises(orjson.JSONDecodeError, orjson.loads, '"\ud83d\ude80"')
         pytest.raises(orjson.JSONDecodeError, orjson.loads, '"\udcff"')
         pytest.raises(
-            orjson.JSONDecodeError, orjson.loads, b'"\xed\xa0\xbd\xed\xba\x80"'
+            orjson.JSONDecodeError,
+            orjson.loads,
+            b'"\xed\xa0\xbd\xed\xba\x80"',
         )  # \ud83d\ude80
 
     def test_str_surrogates_dumps(self):
@@ -252,7 +257,9 @@ class TestType:
         pytest.raises(orjson.JSONEncodeError, orjson.dumps, "\udcff")
         pytest.raises(orjson.JSONEncodeError, orjson.dumps, {"\ud83d\ude80": None})
         pytest.raises(
-            orjson.JSONEncodeError, orjson.dumps, b"\xed\xa0\xbd\xed\xba\x80"
+            orjson.JSONEncodeError,
+            orjson.dumps,
+            b"\xed\xa0\xbd\xed\xba\x80",
         )  # \ud83d\ude80
 
     def test_bytes_dumps(self):
@@ -276,17 +283,28 @@ class TestType:
         arr.extend(b"[]")
         assert orjson.loads(arr) == []
 
-    def test_memoryview_loads(self):
+    @pytest.mark.skipif(SUPPORTS_MEMORYVIEW, reason="memoryview not supported")
+    def test_memoryview_loads_supported(self):
         """
-        memoryview loads
+        memoryview loads supported
         """
         arr = bytearray()
         arr.extend(b"[]")
         assert orjson.loads(memoryview(arr)) == []
 
+    @pytest.mark.skipif(not SUPPORTS_MEMORYVIEW, reason="memoryview supported")
+    def test_memoryview_loads_unsupported(self):
+        """
+        memoryview loads unsupported
+        """
+        arr = bytearray()
+        arr.extend(b"[]")
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.loads(memoryview(arr))
+
     def test_bytesio_loads(self):
         """
-        memoryview loads
+        BytesIO loads
         """
         arr = io.BytesIO(b"[]")
         assert orjson.loads(arr.getbuffer()) == []
@@ -380,7 +398,7 @@ class TestType:
         for val in (9007199254740991, -9007199254740991):
             assert orjson.loads(str(val)) == val
             assert orjson.dumps(val, option=orjson.OPT_STRICT_INTEGER) == str(
-                val
+                val,
             ).encode("utf-8")
 
     def test_int_53_exc(self):
@@ -501,7 +519,7 @@ class TestType:
         for val in ("1.337E40", "1.337e+40", "1337e40", "1.337E-4"):
             obj = orjson.loads(val)
             assert obj == float(val)
-            assert orjson.dumps(val) == ('"%s"' % val).encode("utf-8")
+            assert orjson.dumps(val) == (f'"{val}"').encode("utf-8")
 
     def test_list(self):
         """

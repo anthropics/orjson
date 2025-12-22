@@ -1,21 +1,20 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// Copyright ijl (2022-2025)
 // This is an adaptation of `src/value/ser.rs` from serde-json.
 
-use crate::serialize::writer::formatter::{CompactFormatter, Formatter, PrettyFormatter};
-use crate::serialize::writer::str::*;
 use crate::serialize::writer::WriteExt;
+use crate::serialize::writer::formatter::{CompactFormatter, Formatter, PrettyFormatter};
 use serde::ser::{self, Impossible, Serialize};
 use serde_json::error::{Error, Result};
-use std::io;
 
-pub struct Serializer<W, F = CompactFormatter> {
+pub(crate) struct Serializer<W, F = CompactFormatter> {
     writer: W,
     formatter: F,
 }
 
 impl<W> Serializer<W>
 where
-    W: io::Write + WriteExt,
+    W: WriteExt + bytes::BufMut,
 {
     #[inline]
     pub fn new(writer: W) -> Self {
@@ -25,7 +24,7 @@ where
 
 impl<W> Serializer<W, PrettyFormatter>
 where
-    W: io::Write + WriteExt,
+    W: WriteExt + bytes::BufMut,
 {
     #[inline]
     pub fn pretty(writer: W) -> Self {
@@ -35,23 +34,18 @@ where
 
 impl<W, F> Serializer<W, F>
 where
-    W: io::Write + WriteExt,
+    W: WriteExt + bytes::BufMut,
     F: Formatter,
 {
     #[inline]
     pub fn with_formatter(writer: W, formatter: F) -> Self {
         Serializer { writer, formatter }
     }
-
-    #[inline]
-    pub fn into_inner(self) -> W {
-        self.writer
-    }
 }
 
 impl<'a, W, F> ser::Serializer for &'a mut Serializer<W, F>
 where
-    W: io::Write + WriteExt,
+    W: WriteExt + bytes::BufMut,
     F: Formatter,
 {
     type Ok = ();
@@ -147,7 +141,8 @@ where
         }
         #[cfg(not(yyjson_allow_inf_and_nan))]
         {
-            if unlikely!(value.is_infinite() || value.is_nan()) {
+            if value.is_infinite() || value.is_nan() {
+                cold_path!();
                 self.serialize_unit()
             } else {
                 self.formatter
@@ -179,7 +174,8 @@ where
         }
         #[cfg(not(yyjson_allow_inf_and_nan))]
         {
-            if unlikely!(value.is_infinite() || value.is_nan()) {
+            if value.is_infinite() || value.is_nan() {
+                cold_path!();
                 self.serialize_unit()
             } else {
                 self.formatter
@@ -202,7 +198,9 @@ where
     #[inline(always)]
     fn serialize_bytes(self, value: &[u8]) -> Result<()> {
         self.writer.reserve(value.len() + 32);
-        unsafe { self.writer.write_reserved_fragment(value).unwrap() };
+        unsafe {
+            self.writer.put_slice(value);
+        }
         Ok(())
     }
 
@@ -218,11 +216,9 @@ where
         debug_assert!(name.len() <= 36);
         reserve_minimum!(self.writer);
         unsafe {
-            self.writer.write_reserved_punctuation(b'"').unwrap();
-            self.writer
-                .write_reserved_fragment(name.as_bytes())
-                .unwrap();
-            self.writer.write_reserved_punctuation(b'"').unwrap();
+            self.writer.put_u8(b'"');
+            self.writer.put_slice(name.as_bytes());
+            self.writer.put_u8(b'"');
         }
         Ok(())
     }
@@ -329,19 +325,19 @@ where
 }
 
 #[derive(Eq, PartialEq)]
-pub enum State {
+pub(crate) enum State {
     First,
     Rest,
 }
 
-pub struct Compound<'a, W: 'a, F: 'a> {
+pub(crate) struct Compound<'a, W: 'a, F: 'a> {
     ser: &'a mut Serializer<W, F>,
     state: State,
 }
 
-impl<'a, W, F> ser::SerializeSeq for Compound<'a, W, F>
+impl<W, F> ser::SerializeSeq for Compound<'_, W, F>
 where
-    W: io::Write + WriteExt,
+    W: WriteExt + bytes::BufMut,
     F: Formatter,
 {
     type Ok = ();
@@ -373,9 +369,9 @@ where
     }
 }
 
-impl<'a, W, F> ser::SerializeMap for Compound<'a, W, F>
+impl<W, F> ser::SerializeMap for Compound<'_, W, F>
 where
-    W: io::Write + WriteExt,
+    W: WriteExt + bytes::BufMut,
     F: Formatter,
 {
     type Ok = ();
@@ -438,9 +434,9 @@ struct MapKeySerializer<'a, W: 'a, F: 'a> {
     ser: &'a mut Serializer<W, F>,
 }
 
-impl<'a, W, F> ser::Serializer for MapKeySerializer<'a, W, F>
+impl<W, F> ser::Serializer for MapKeySerializer<'_, W, F>
 where
-    W: io::Write + WriteExt,
+    W: WriteExt + bytes::BufMut,
     F: Formatter,
 {
     type Ok = ();
@@ -616,116 +612,106 @@ macro_rules! reserve_str {
     };
 }
 
-#[cfg(all(feature = "unstable-simd", not(target_arch = "x86_64")))]
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+type StrFormatter = unsafe fn(*mut u8, *const u8, usize) -> usize;
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+static mut STR_FORMATTER_FN: StrFormatter =
+    crate::serialize::writer::str::format_escaped_str_impl_sse2_128;
+
+pub(crate) fn set_str_formatter_fn() {
+    unsafe {
+        #[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+        if std::is_x86_feature_detected!("avx512vl") {
+            STR_FORMATTER_FN = crate::serialize::writer::str::format_escaped_str_impl_512vl;
+        }
+    }
+}
+
+#[cfg(all(target_arch = "x86_64", not(feature = "avx512")))]
 #[inline(always)]
 fn format_escaped_str<W>(writer: &mut W, value: &str)
 where
-    W: ?Sized + io::Write + WriteExt,
+    W: ?Sized + WriteExt + bytes::BufMut,
 {
     unsafe {
         reserve_str!(writer, value);
 
-        let written = format_escaped_str_impl_generic_128(
+        let written = crate::serialize::writer::str::format_escaped_str_impl_sse2_128(
             writer.as_mut_buffer_ptr(),
             value.as_bytes().as_ptr(),
             value.len(),
         );
 
-        writer.set_written(written);
+        writer.advance_mut(written);
+    }
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx512"))]
+#[inline(always)]
+fn format_escaped_str<W>(writer: &mut W, value: &str)
+where
+    W: ?Sized + WriteExt + bytes::BufMut,
+{
+    unsafe {
+        reserve_str!(writer, value);
+
+        let written = STR_FORMATTER_FN(
+            writer.as_mut_buffer_ptr(),
+            value.as_bytes().as_ptr(),
+            value.len(),
+        );
+
+        writer.advance_mut(written);
     }
 }
 
 #[cfg(all(
-    feature = "unstable-simd",
-    target_arch = "x86_64",
-    not(feature = "avx512")
+    not(target_arch = "x86_64"),
+    not(feature = "avx512"),
+    feature = "generic_simd"
 ))]
 #[inline(always)]
 fn format_escaped_str<W>(writer: &mut W, value: &str)
 where
-    W: ?Sized + io::Write + WriteExt,
+    W: ?Sized + WriteExt + bytes::BufMut,
 {
     unsafe {
         reserve_str!(writer, value);
 
-        let written = format_escaped_str_impl_sse2_128(
+        let written = crate::serialize::writer::str::format_escaped_str_impl_generic_128(
             writer.as_mut_buffer_ptr(),
             value.as_bytes().as_ptr(),
             value.len(),
         );
 
-        writer.set_written(written);
+        writer.advance_mut(written);
     }
 }
 
-#[cfg(all(feature = "unstable-simd", target_arch = "x86_64", feature = "avx512"))]
+#[cfg(all(not(target_arch = "x86_64"), not(feature = "generic_simd")))]
 #[inline(always)]
 fn format_escaped_str<W>(writer: &mut W, value: &str)
 where
-    W: ?Sized + io::Write + WriteExt,
+    W: ?Sized + WriteExt + bytes::BufMut,
 {
     unsafe {
         reserve_str!(writer, value);
 
-        if std::is_x86_feature_detected!("avx512vl") {
-            let written = format_escaped_str_impl_512vl(
-                writer.as_mut_buffer_ptr(),
-                value.as_bytes().as_ptr(),
-                value.len(),
-            );
-            writer.set_written(written);
-        } else {
-            let written = format_escaped_str_impl_sse2_128(
-                writer.as_mut_buffer_ptr(),
-                value.as_bytes().as_ptr(),
-                value.len(),
-            );
-            writer.set_written(written);
-        };
-    }
-}
-
-#[cfg(all(not(feature = "unstable-simd"), not(target_arch = "x86_64")))]
-#[inline(always)]
-fn format_escaped_str<W>(writer: &mut W, value: &str)
-where
-    W: ?Sized + io::Write + WriteExt,
-{
-    unsafe {
-        reserve_str!(writer, value);
-
-        let written = format_escaped_str_scalar(
-            writer.as_mut_buffer_ptr(),
-            value.as_bytes().as_ptr(),
-            value.len(),
-        );
-        writer.set_written(written);
-    }
-}
-
-#[cfg(all(not(feature = "unstable-simd"), target_arch = "x86_64"))]
-#[inline(always)]
-fn format_escaped_str<W>(writer: &mut W, value: &str)
-where
-    W: ?Sized + io::Write + WriteExt,
-{
-    unsafe {
-        reserve_str!(writer, value);
-
-        let written = format_escaped_str_impl_sse2_128(
+        let written = crate::serialize::writer::str::format_escaped_str_scalar(
             writer.as_mut_buffer_ptr(),
             value.as_bytes().as_ptr(),
             value.len(),
         );
 
-        writer.set_written(written);
+        writer.advance_mut(written);
     }
 }
 
 #[inline]
-pub fn to_writer<W, T>(writer: W, value: &T) -> Result<()>
+pub(crate) fn to_writer<W, T>(writer: W, value: &T) -> Result<()>
 where
-    W: io::Write + WriteExt,
+    W: WriteExt + bytes::BufMut,
     T: ?Sized + Serialize,
 {
     let mut ser = Serializer::new(writer);
@@ -733,9 +719,9 @@ where
 }
 
 #[inline]
-pub fn to_writer_pretty<W, T>(writer: W, value: &T) -> Result<()>
+pub(crate) fn to_writer_pretty<W, T>(writer: W, value: &T) -> Result<()>
 where
-    W: io::Write + WriteExt,
+    W: WriteExt + bytes::BufMut,
     T: ?Sized + Serialize,
 {
     let mut ser = Serializer::pretty(writer);

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// Copyright ijl (2018-2025)
 
 use crate::serialize::serializer::PyObjectSerializer;
 use crate::typeref::VALUE_STR;
 use serde::ser::{Serialize, Serializer};
 
 #[repr(transparent)]
-pub struct EnumSerializer<'a> {
+pub(crate) struct EnumSerializer<'a> {
     previous: &'a PyObjectSerializer,
 }
 
@@ -15,7 +16,7 @@ impl<'a> EnumSerializer<'a> {
     }
 }
 
-impl<'a> Serialize for EnumSerializer<'a> {
+impl Serialize for EnumSerializer<'_> {
     #[inline(never)]
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

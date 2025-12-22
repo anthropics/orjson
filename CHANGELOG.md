@@ -24,7 +24,100 @@
 - Support serializing PyTorch tensors when numpy serialization is enabled.
 
 
-## 3.10.14
+## 3.11.5 - 2025-12-06
+
+### Changed
+
+- Show simple error message instead of traceback when attempting to
+build on unsupported Python versions.
+
+
+## 3.11.4 - 2025-10-24
+
+### Changed
+
+- ABI compatibility with CPython 3.15 alpha 1.
+- Publish PyPI wheels for 3.14 and manylinux i686, manylinux arm7,
+manylinux ppc64le, manylinux s390x.
+- Build now requires a C compiler.
+
+
+## 3.11.3 - 2025-08-26
+
+### Fixed
+
+- Fix PyPI project metadata when using maturin 1.9.2 or later.
+
+
+## 3.11.2 - 2025-08-12
+
+### Fixed
+
+- Fix build using Rust 1.89 on amd64.
+
+### Changed
+
+- Build now depends on Rust 1.85 or later instead of 1.82.
+
+
+## 3.11.1 - 2025-07-25
+
+### Changed
+
+- Publish PyPI wheels for CPython 3.14.
+
+### Fixed
+
+- Fix `str` on big-endian architectures. This was introduced in 3.11.0.
+
+
+## 3.11.0 - 2025-07-15
+
+### Changed
+
+- Use a deserialization buffer allocated per request instead of a shared
+buffer allocated on import.
+- ABI compatibility with CPython 3.14 beta 4.
+
+
+## 3.10.18 - 2025-04-29
+
+### Fixed
+
+- Fix incorrect escaping of the vertical tabulation character. This was
+introduced in 3.10.17.
+
+
+## 3.10.17 - 2025-04-29
+
+### Changed
+
+- Publish PyPI Windows aarch64/arm64 wheels.
+- ABI compatibility with CPython 3.14 alpha 7.
+- Fix incompatibility running on Python 3.13 using WASM.
+
+
+## 3.10.16 - 2025-03-24
+
+### Changed
+
+- Improve performance of serialization on amd64 machines with AVX-512.
+- ABI compatibility with CPython 3.14 alpha 6.
+- Drop support for Python 3.8.
+- Publish additional PyPI wheels for macOS that target only aarch64, macOS 15,
+and recent Python.
+
+
+## 3.10.15 - 2025-01-08
+
+### Changed
+
+- Publish PyPI manylinux aarch64 wheels built and tested on aarch64.
+- Publish PyPI musllinux aarch64 and arm7l wheels built and tested on aarch64.
+- Publish PyPI manylinux Python 3.13 wheels for i686, arm7l, ppc64le, and s390x.
+
+
+## 3.10.14 - 2024-12-29
 
 ### Changed
 
@@ -36,7 +129,7 @@ tests skip if fixtures are not present.
 - Build now depends on Rust 1.82 or later instead of 1.72.
 
 
-## 3.10.13
+## 3.10.13 - 2024-12-29
 
 ### Changed
 
@@ -46,7 +139,7 @@ being buildable from source by end users (via PEP 517) must upgrade to at
 least this version.
 
 
-## 3.10.12
+## 3.10.12 - 2024-11-23
 
 ### Changed
 
@@ -56,7 +149,7 @@ least this version.
 - Publish PyPI Windows wheels using trusted publishing.
 
 
-## 3.10.11
+## 3.10.11 - 2024-11-01
 
 ### Changed
 
@@ -65,7 +158,7 @@ least this version.
 - Include text of licenses for vendored dependencies.
 
 
-## 3.10.10
+## 3.10.10 - 2024-10-22
 
 ### Fixed
 
@@ -76,7 +169,7 @@ least this version.
 - Publish aarch64 manylinux_2_17 wheel for 3.13 to PyPI.
 
 
-## 3.10.9
+## 3.10.9 - 2024-10-19
 
 ### Fixed
 
@@ -84,7 +177,7 @@ least this version.
 introduced in 3.10.8.
 
 
-## 3.10.8
+## 3.10.8 - 2024-10-19
 
 ### Changed
 

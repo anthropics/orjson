@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// Copyright ijl (2024-2025)
 
 #[cfg(feature = "avx512")]
 mod avx512;
-mod ffi;
+mod pystr;
 mod pyunicode_new;
 mod scalar;
 
-#[cfg(not(feature = "avx512"))]
-pub use scalar::unicode_from_str;
-
-#[cfg(feature = "avx512")]
-pub use avx512::unicode_from_str;
-
-pub use ffi::*;
+pub(crate) use pystr::{PyStr, PyStrSubclass, set_str_create_fn};

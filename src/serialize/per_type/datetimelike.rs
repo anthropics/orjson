@@ -1,36 +1,35 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// Copyright Ben Sully (2021), ijl (2020-2025)
 
-use crate::opt::*;
+use crate::opt::{NAIVE_UTC, OMIT_MICROSECONDS, Opt, UTC_Z};
 
-use crate::serialize::buffer::SmallFixedBuffer;
-
-pub enum DateTimeError {
+pub(crate) enum DateTimeError {
     LibraryUnsupported,
 }
 
 macro_rules! write_double_digit {
     ($buf:ident, $value:expr) => {
         if $value < 10 {
-            $buf.push(b'0');
+            $buf.put_u8(b'0');
         }
-        $buf.extend_from_slice(itoa::Buffer::new().format($value).as_bytes());
+        $buf.put_slice(itoa::Buffer::new().format($value).as_bytes());
     };
 }
 
 macro_rules! write_triple_digit {
     ($buf:ident, $value:expr) => {
         if $value < 100 {
-            $buf.push(b'0');
+            $buf.put_u8(b'0');
         }
         if $value < 10 {
-            $buf.push(b'0');
+            $buf.put_u8(b'0');
         }
-        $buf.extend_from_slice(itoa::Buffer::new().format($value).as_bytes());
+        $buf.put_slice(itoa::Buffer::new().format($value).as_bytes());
     };
 }
 
 #[derive(Default)]
-pub struct Offset {
+pub(crate) struct Offset {
     pub day: i32,
     pub second: i32,
 }
@@ -39,7 +38,7 @@ pub struct Offset {
 ///
 /// The provided `write_buf` method does not allocate, and is faster
 /// than writing to a heap-allocated string.
-pub trait DateTimeLike {
+pub(crate) trait DateTimeLike {
     /// Returns the year component of the datetime.
     fn year(&self) -> i32;
     /// Returns the month component of the datetime.
@@ -60,7 +59,7 @@ pub trait DateTimeLike {
     /// Is the object time-zone aware?
     fn has_tz(&self) -> bool;
 
-    //// python3.8 or below implementation of offset()
+    //// Non-zoneinfo implementation of offset()
     fn slow_offset(&self) -> Result<Offset, DateTimeError>;
 
     /// The offset of the timezone.
@@ -69,31 +68,35 @@ pub trait DateTimeLike {
     /// Write `self` to a buffer in RFC3339 format, using `opts` to
     /// customise if desired.
     #[inline(never)]
-    fn write_buf(&self, buf: &mut SmallFixedBuffer, opts: Opt) -> Result<(), DateTimeError> {
+    fn write_buf<B>(&self, buf: &mut B, opts: Opt) -> Result<(), DateTimeError>
+    where
+        B: bytes::BufMut,
+    {
         {
             let year = self.year();
             let mut yearbuf = itoa::Buffer::new();
             let formatted = yearbuf.format(year);
-            if unlikely!(year < 1000) {
+            if year < 1000 {
+                cold_path!();
                 // date-fullyear   = 4DIGIT
-                buf.extend_from_slice(&[b'0', b'0', b'0', b'0'][..(4 - formatted.len())]);
+                buf.put_slice(&[b'0', b'0', b'0', b'0'][..(4 - formatted.len())]);
             }
-            buf.extend_from_slice(formatted.as_bytes());
+            buf.put_slice(formatted.as_bytes());
         }
-        buf.push(b'-');
+        buf.put_u8(b'-');
         write_double_digit!(buf, self.month());
-        buf.push(b'-');
+        buf.put_u8(b'-');
         write_double_digit!(buf, self.day());
-        buf.push(b'T');
+        buf.put_u8(b'T');
         write_double_digit!(buf, self.hour());
-        buf.push(b':');
+        buf.put_u8(b':');
         write_double_digit!(buf, self.minute());
-        buf.push(b':');
+        buf.put_u8(b':');
         write_double_digit!(buf, self.second());
         if opt_disabled!(opts, OMIT_MICROSECONDS) {
             let microsecond = self.microsecond();
             if microsecond != 0 {
-                buf.push(b'.');
+                buf.put_u8(b'.');
                 write_triple_digit!(buf, microsecond / 1_000);
                 write_triple_digit!(buf, microsecond % 1_000);
                 // Don't support writing nanoseconds for now.
@@ -110,25 +113,25 @@ pub trait DateTimeLike {
             let mut offset_second = offset.second;
             if offset_second == 0 {
                 if opt_enabled!(opts, UTC_Z) {
-                    buf.push(b'Z');
+                    buf.put_u8(b'Z');
                 } else {
-                    buf.extend_from_slice(b"+00:00");
+                    buf.put_slice(b"+00:00");
                 }
             } else {
                 // This branch is only really hit by the Python datetime implementation,
                 // since numpy datetimes are all converted to UTC.
                 if offset.day == -1 {
                     // datetime.timedelta(days=-1, seconds=68400) -> -05:00
-                    buf.push(b'-');
+                    buf.put_u8(b'-');
                     offset_second = 86400 - offset_second;
                 } else {
                     // datetime.timedelta(seconds=37800) -> +10:30
-                    buf.push(b'+');
+                    buf.put_u8(b'+');
                 }
                 let offset_minute = offset_second / 60;
                 let offset_hour = offset_minute / 60;
                 write_double_digit!(buf, offset_hour);
-                buf.push(b':');
+                buf.put_u8(b':');
                 let mut offset_minute_print = offset_minute % 60;
                 // https://tools.ietf.org/html/rfc3339#section-5.8
                 // "exactly 19 minutes and 32.13 seconds ahead of UTC"

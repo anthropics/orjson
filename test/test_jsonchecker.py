@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# Copyright ijl (2018-2025)
 """
 Tests files from http://json.org/JSON_checker/
 """
@@ -132,7 +133,8 @@ class TestJsonChecker:
         fail18.json
         """
         self._run_pass_json(
-            "fail18.json", b'[[[[[[[[[[[[[[[[[[[["Too deep"]]]]]]]]]]]]]]]]]]]]'
+            "fail18.json",
+            b'[[[[[[[[[[[[[[[[[[[["Too deep"]]]]]]]]]]]]]]]]]]]]',
         )
 
     def test_fail19(self):
@@ -236,7 +238,8 @@ class TestJsonChecker:
         pass02.json
         """
         self._run_pass_json(
-            "pass02.json", b'[[[[[[[[[[[[[[[[[[["Not too deep"]]]]]]]]]]]]]]]]]]]'
+            "pass02.json",
+            b'[[[[[[[[[[[[[[[[[[["Not too deep"]]]]]]]]]]]]]]]]]]]',
         )
 
     def test_pass03(self):

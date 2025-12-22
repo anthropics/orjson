@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
+# Copyright ijl (2019-2025)
 
 import abc
 import uuid
 from dataclasses import InitVar, asdict, dataclass, field
 from enum import Enum
-from typing import ClassVar, Dict, Optional
+from typing import ClassVar, Optional
 
 import pytest
 
@@ -63,7 +64,7 @@ class Datasubclass(Dataclass1):
 
 @dataclass
 class Slotsdataclass:
-    __slots__ = ("a", "b", "_c", "d")
+    __slots__ = ("_c", "a", "b", "d")
     a: str
     b: int
     _c: str
@@ -82,7 +83,7 @@ class UnsortedDataclass:
     c: int
     b: int
     a: int
-    d: Optional[Dict]
+    d: Optional[dict]
 
 
 @dataclass
@@ -214,7 +215,8 @@ class TestDataclass:
                 return __obj.value
 
         obj = Defaultdataclass(
-            uuid.UUID("808989c0-00d5-48a8-b5c4-c804bf9032f2"), AnEnum.ONE
+            uuid.UUID("808989c0-00d5-48a8-b5c4-c804bf9032f2"),
+            AnEnum.ONE,
         )
         assert (
             orjson.dumps(obj, default=default)
@@ -269,7 +271,8 @@ class TestDataclassPassthrough:
             orjson.dumps(obj, option=orjson.OPT_PASSTHROUGH_DATACLASS)
         with pytest.raises(orjson.JSONEncodeError):
             orjson.dumps(
-                InitDataclass("zxc", "vbn"), option=orjson.OPT_PASSTHROUGH_DATACLASS
+                InitDataclass("zxc", "vbn"),
+                option=orjson.OPT_PASSTHROUGH_DATACLASS,
             )
 
     def test_dataclass_passthrough_default(self):

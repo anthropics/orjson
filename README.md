@@ -21,14 +21,21 @@ RFC 8259 ("The JavaScript Object Notation (JSON) Data Interchange Format").
 Reading from and writing to files, line-delimited JSON files, and so on is
 not provided by the library.
 
-orjson supports CPython 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, and 3.14.
+orjson supports CPython 3.9, 3.10, 3.11, 3.12, 3.13, 3.14, and 3.15.
 
-It distributes amd64/x86_64, i686/x86, aarch64/armv8, arm7, POWER/ppc64le,
-and s390x wheels for Linux, amd64 and aarch64 wheels for macOS, and amd64
-and i686/x86 wheels for Windows.
+It distributes amd64/x86_64/x64, i686/x86, aarch64/arm64/armv8, arm7,
+ppc64le/POWER8, and s390x wheels for Linux, amd64 and aarch64 wheels
+for macOS, and amd64, i686, and aarch64 wheels for Windows.
+
+Wheels published to PyPI for amd64 run on x86-64-v1 (2003)
+or later, but will at runtime use AVX-512 if available for a
+significant performance benefit; aarch64 wheels run on ARMv8-A (2011) or
+later.
 
 orjson does not and will not support PyPy, embedded Python builds for
 Android/iOS, or PEP 554 subinterpreters.
+
+orjson may support PEP 703 free-threading when it is stable.
 
 Releases follow semantic versioning and serializing a new object type
 without an opt-in flag is considered a breaking change.
@@ -251,9 +258,7 @@ b"[]\n"
 
 Pretty-print output with an indent of two spaces. This is equivalent to
 `indent=2` in the standard library. Pretty printing is slower and the output
-larger. orjson is the fastest compared library at pretty printing and has
-much less of a slowdown to pretty print than the standard library does. This
-option is compatible with all other options.
+larger. This option is compatible with all other options.
 
 ```python
 >>> import orjson
@@ -614,6 +619,9 @@ which the standard library allows, but is not valid JSON.
 It raises `JSONDecodeError` if a combination of array or object recurses
 1024 levels deep.
 
+It raises `JSONDecodeError` if unable to allocate a buffer large enough
+to parse the document.
+
 `JSONDecodeError` is a subclass of `json.JSONDecodeError` and `ValueError`.
 This is for compatibility with the standard library.
 
@@ -952,8 +960,7 @@ repositories. It is tested to not crash against the
 It is tested to not leak memory. It is tested to not crash
 against and not accept invalid UTF-8. There are integration tests
 exercising the library's use in web servers (gunicorn using multiprocess/forked
-workers) and when
-multithreaded. It also uses some tests from the ultrajson library.
+workers) and when multithreaded.
 
 orjson is the most correct of the compared libraries. This graph shows how each
 library handles a combined 342 JSON fixtures from the
@@ -1048,17 +1055,6 @@ artifact on PyPI. The latency results can be reproduced using the `pybench` scri
 
 ## Questions
 
-### Why can't I install it from PyPI?
-
-Probably `pip` needs to be upgraded to version 20.3 or later to support
-the latest manylinux_x_y or universal2 wheel formats.
-
-### "Cargo, the Rust package manager, is not installed or is not on PATH."
-
-This happens when there are no binary wheels (like manylinux) for your
-platform on PyPI. You can install [Rust](https://www.rust-lang.org/) through
-`rustup` or a package manager and then it will compile.
-
 ### Will it deserialize to dataclasses, UUIDs, decimals, etc or support object_hook?
 
 No. This requires a schema specifying what types are expected and how to
@@ -1077,29 +1073,31 @@ No. [orjsonl](https://github.com/umarbutler/orjsonl) may be appropriate.
 
 No, it supports RFC 8259.
 
+### How do I depend on orjson in a Rust project?
+
+orjson is only shipped as a Python module. The project should depend on
+`orjson` in its own Python requirements and should obtain pointers to
+functions and objects using the normal `PyImport_*` APIs.
+
 ## Packaging
 
-To package orjson requires at least [Rust](https://www.rust-lang.org/) 1.82
-and the [maturin](https://github.com/PyO3/maturin) build tool. The recommended
-build command is:
+To package orjson requires at least [Rust](https://www.rust-lang.org/) 1.85,
+a C compiler, and the [maturin](https://github.com/PyO3/maturin) build tool.
+The recommended build command is:
 
 ```sh
 maturin build --release --strip
 ```
 
-It benefits from also having a C build environment to compile a faster
-deserialization backend. See this project's `manylinux_2_28` builds for an
-example using clang and LTO.
-
-The project's own CI tests against `nightly-2025-01-07` and stable 1.72. It
+The project's own CI tests against `nightly-2025-12-01` and stable 1.85. It
 is prudent to pin the nightly version because that channel can introduce
 breaking changes. There is a significant performance benefit to using
 nightly.
 
-orjson is tested for amd64, aarch64, and i686 on Linux and cross-compiles for
-arm7, ppc64le, and s390x. It is tested for either aarch64 or amd64 on macOS and
-cross-compiles for the other, depending on version. For Windows it is
-tested on amd64 and i686.
+orjson is tested on native hardware for amd64, aarch64, and i686 on Linux and
+for arm7, ppc64le, and s390x is cross-compiled and may be tested via
+emulation. It is tested for aarch64 on macOS and cross-compiles for amd64. For
+Windows it is tested on amd64, i686, and aarch64.
 
 There are no runtime dependencies other than libc.
 
@@ -1107,10 +1105,11 @@ The source distribution on PyPI contains all dependencies' source and can be
 built without network access. The file can be downloaded from
 `https://files.pythonhosted.org/packages/source/o/orjson/orjson-${version}.tar.gz`.
 
-orjson's tests are included in the source distribution on PyPI. The
-requirements to run the tests are specified in `test/requirements.txt`. The
-tests should be run as part of the build. It can be run with
-`pytest -q test`.
+orjson's tests are included in the source distribution on PyPI. The tests
+require only `pytest`. There are optional packages such as `pytz` and `numpy`
+listed in `test/requirements.txt` and used in ~10% of tests. Not having these
+dependencies causes the tests needing them to skip. Tests can be run
+with `pytest -q test`.
 
 ## License
 

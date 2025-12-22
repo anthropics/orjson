@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// Copyright ijl (2018-2025)
 
 use crate::serialize::error::SerializeError;
-use crate::str::{unicode_to_str, unicode_to_str_via_ffi};
+use crate::str::{PyStr, PyStrSubclass};
 
 use serde::ser::{Serialize, Serializer};
 
 #[repr(transparent)]
-pub struct StrSerializer {
-    ptr: *mut pyo3_ffi::PyObject,
+pub(crate) struct StrSerializer {
+    ptr: *mut crate::ffi::PyObject,
 }
 
 impl StrSerializer {
-    pub fn new(ptr: *mut pyo3_ffi::PyObject) -> Self {
+    pub fn new(ptr: *mut crate::ffi::PyObject) -> Self {
         StrSerializer { ptr: ptr }
     }
 }
@@ -22,24 +23,20 @@ impl Serialize for StrSerializer {
     where
         S: Serializer,
     {
-        let uni = {
-            let tmp = unicode_to_str(self.ptr);
-            if unlikely!(tmp.is_none()) {
-                err!(SerializeError::InvalidStr)
-            };
-            tmp.unwrap()
-        };
-        serializer.serialize_str(uni)
+        match unsafe { PyStr::from_ptr_unchecked(self.ptr).to_str() } {
+            Some(uni) => serializer.serialize_str(uni),
+            None => err!(SerializeError::InvalidStr),
+        }
     }
 }
 
 #[repr(transparent)]
-pub struct StrSubclassSerializer {
-    ptr: *mut pyo3_ffi::PyObject,
+pub(crate) struct StrSubclassSerializer {
+    ptr: *mut crate::ffi::PyObject,
 }
 
 impl StrSubclassSerializer {
-    pub fn new(ptr: *mut pyo3_ffi::PyObject) -> Self {
+    pub fn new(ptr: *mut crate::ffi::PyObject) -> Self {
         StrSubclassSerializer { ptr: ptr }
     }
 }
@@ -50,10 +47,9 @@ impl Serialize for StrSubclassSerializer {
     where
         S: Serializer,
     {
-        let uni = unicode_to_str_via_ffi(self.ptr);
-        if unlikely!(uni.is_none()) {
-            err!(SerializeError::InvalidStr)
+        match unsafe { PyStrSubclass::from_ptr_unchecked(self.ptr).to_str() } {
+            Some(uni) => serializer.serialize_str(uni),
+            None => err!(SerializeError::InvalidStr),
         }
-        serializer.serialize_str(uni.unwrap())
     }
 }

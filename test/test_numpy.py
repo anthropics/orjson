@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
-
+# Copyright ijl (2020-2025), Ben Sully (2021), Nazar Kostetskyi (2022), Aviram Hassan (2020-2021), Marco Ribeiro (2020), Eric Jolibois (2021)
+# mypy: ignore-errors
 
 from datetime import datetime
 import sys
@@ -8,10 +9,7 @@ import pytest
 
 import orjson
 
-try:
-    import numpy
-except ImportError:
-    numpy = None  # type: ignore
+from .util import numpy
 
 
 def numpy_default(obj):
@@ -238,7 +236,7 @@ class TestNumpy:
                         numpy.datetime64("2022"),
                         numpy.datetime64("2023"),
                         numpy.datetime64("9999"),
-                    ]
+                    ],
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
@@ -253,7 +251,7 @@ class TestNumpy:
                         numpy.datetime64("2021-01"),
                         numpy.datetime64("2022-01"),
                         numpy.datetime64("2023-01"),
-                    ]
+                    ],
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
@@ -268,7 +266,7 @@ class TestNumpy:
                         numpy.datetime64("2021-01-01"),
                         numpy.datetime64("2021-01-01"),
                         numpy.datetime64("2021-01-01"),
-                    ]
+                    ],
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
@@ -283,7 +281,7 @@ class TestNumpy:
                         numpy.datetime64("2021-01-01T00"),
                         numpy.datetime64("2021-01-01T01"),
                         numpy.datetime64("2021-01-01T02"),
-                    ]
+                    ],
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
@@ -298,7 +296,7 @@ class TestNumpy:
                         numpy.datetime64("2021-01-01T00:00"),
                         numpy.datetime64("2021-01-01T00:01"),
                         numpy.datetime64("2021-01-01T00:02"),
-                    ]
+                    ],
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
@@ -313,7 +311,7 @@ class TestNumpy:
                         numpy.datetime64("2021-01-01T00:00:00"),
                         numpy.datetime64("2021-01-01T00:00:01"),
                         numpy.datetime64("2021-01-01T00:00:02"),
-                    ]
+                    ],
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
@@ -328,7 +326,7 @@ class TestNumpy:
                         numpy.datetime64("2021-01-01T00:00:00"),
                         numpy.datetime64("2021-01-01T00:00:00.172"),
                         numpy.datetime64("2021-01-01T00:00:00.567"),
-                    ]
+                    ],
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
@@ -343,7 +341,7 @@ class TestNumpy:
                         numpy.datetime64("2021-01-01T00:00:00"),
                         numpy.datetime64("2021-01-01T00:00:00.172"),
                         numpy.datetime64("2021-01-01T00:00:00.567891"),
-                    ]
+                    ],
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
@@ -358,7 +356,7 @@ class TestNumpy:
                         numpy.datetime64("2021-01-01T00:00:00"),
                         numpy.datetime64("2021-01-01T00:00:00.172"),
                         numpy.datetime64("2021-01-01T00:00:00.567891234"),
-                    ]
+                    ],
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
@@ -373,11 +371,11 @@ class TestNumpy:
                         numpy.datetime64("2021-01-01T00:00:00"),
                         numpy.datetime64("2021-01-01T00:00:00.172"),
                         numpy.datetime64("2021-01-01T00:00:00.567891234567"),
-                    ]
+                    ],
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
-            assert False
+            raise AssertionError()
         except TypeError as exc:
             assert str(exc) == "unsupported numpy.datetime64 unit: picoseconds"
 
@@ -439,7 +437,8 @@ class TestNumpy:
         assert (
             orjson.dumps(
                 numpy.array(
-                    [[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]], numpy.float64
+                    [[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]],
+                    numpy.float64,
                 ),
                 option=orjson.OPT_SERIALIZE_NUMPY,
             )
@@ -452,7 +451,9 @@ class TestNumpy:
         with pytest.raises(orjson.JSONEncodeError):
             orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY)
         assert orjson.dumps(
-            array, default=numpy_default, option=orjson.OPT_SERIALIZE_NUMPY
+            array,
+            default=numpy_default,
+            option=orjson.OPT_SERIALIZE_NUMPY,
         ) == orjson.dumps(array.tolist())
 
     def test_numpy_array_non_contiguous_message(self):
@@ -460,7 +461,7 @@ class TestNumpy:
         assert array.flags["F_CONTIGUOUS"] is True
         try:
             orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY)
-            assert False
+            raise AssertionError()
         except TypeError as exc:
             assert (
                 str(exc)
@@ -494,7 +495,7 @@ class TestNumpy:
                 orjson.dumps(
                     array,
                     option=orjson.OPT_SERIALIZE_NUMPY,
-                )
+                ),
             )
             == array.tolist()
         )
@@ -506,7 +507,7 @@ class TestNumpy:
                 orjson.dumps(
                     array,
                     option=orjson.OPT_SERIALIZE_NUMPY,
-                )
+                ),
             )
             == array.tolist()
         )
@@ -518,7 +519,7 @@ class TestNumpy:
                 orjson.dumps(
                     array,
                     option=orjson.OPT_SERIALIZE_NUMPY,
-                )
+                ),
             )
             == array.tolist()
         )
@@ -530,7 +531,7 @@ class TestNumpy:
                 orjson.dumps(
                     array,
                     option=orjson.OPT_SERIALIZE_NUMPY,
-                )
+                ),
             )
             == array.tolist()
         )
@@ -542,7 +543,7 @@ class TestNumpy:
                 orjson.dumps(
                     array,
                     option=orjson.OPT_SERIALIZE_NUMPY,
-                )
+                ),
             )
             == array.tolist()
         )
@@ -558,7 +559,7 @@ class TestNumpy:
                 orjson.dumps(
                     array,
                     option=orjson.OPT_SERIALIZE_NUMPY,
-                )
+                ),
             )
             == array.tolist()
         )
@@ -569,7 +570,7 @@ class TestNumpy:
                 orjson.dumps(
                     array,
                     option=orjson.OPT_SERIALIZE_NUMPY,
-                )
+                ),
             )
             == array.tolist()
         )
@@ -580,7 +581,7 @@ class TestNumpy:
                 orjson.dumps(
                     array,
                     option=orjson.OPT_SERIALIZE_NUMPY,
-                )
+                ),
             )
             == array.tolist()
         )
@@ -626,7 +627,7 @@ class TestNumpy:
                 orjson.dumps(
                     array,
                     option=orjson.OPT_SERIALIZE_NUMPY,
-                )
+                ),
             )
             == array.tolist()
         )
@@ -665,13 +666,15 @@ class TestNumpy:
     def test_numpy_scalar_int64(self):
         assert (
             orjson.dumps(
-                numpy.int64(-9223372036854775808), option=orjson.OPT_SERIALIZE_NUMPY
+                numpy.int64(-9223372036854775808),
+                option=orjson.OPT_SERIALIZE_NUMPY,
             )
             == b"-9223372036854775808"
         )
         assert (
             orjson.dumps(
-                numpy.int64(9223372036854775807), option=orjson.OPT_SERIALIZE_NUMPY
+                numpy.int64(9223372036854775807),
+                option=orjson.OPT_SERIALIZE_NUMPY,
             )
             == b"9223372036854775807"
         )
@@ -700,7 +703,8 @@ class TestNumpy:
         assert orjson.dumps(numpy.uint64(0), option=orjson.OPT_SERIALIZE_NUMPY) == b"0"
         assert (
             orjson.dumps(
-                numpy.uint64(18446744073709551615), option=orjson.OPT_SERIALIZE_NUMPY
+                numpy.uint64(18446744073709551615),
+                option=orjson.OPT_SERIALIZE_NUMPY,
             )
             == b"18446744073709551615"
         )
@@ -747,7 +751,8 @@ class TestNumpy:
     def test_numpy_datetime_day(self):
         assert (
             orjson.dumps(
-                numpy.datetime64("2021-01-01"), option=orjson.OPT_SERIALIZE_NUMPY
+                numpy.datetime64("2021-01-01"),
+                option=orjson.OPT_SERIALIZE_NUMPY,
             )
             == b'"2021-01-01T00:00:00"'
         )
@@ -755,7 +760,8 @@ class TestNumpy:
     def test_numpy_datetime_hour(self):
         assert (
             orjson.dumps(
-                numpy.datetime64("2021-01-01T00"), option=orjson.OPT_SERIALIZE_NUMPY
+                numpy.datetime64("2021-01-01T00"),
+                option=orjson.OPT_SERIALIZE_NUMPY,
             )
             == b'"2021-01-01T00:00:00"'
         )
@@ -763,7 +769,8 @@ class TestNumpy:
     def test_numpy_datetime_minute(self):
         assert (
             orjson.dumps(
-                numpy.datetime64("2021-01-01T00:00"), option=orjson.OPT_SERIALIZE_NUMPY
+                numpy.datetime64("2021-01-01T00:00"),
+                option=orjson.OPT_SERIALIZE_NUMPY,
             )
             == b'"2021-01-01T00:00:00"'
         )
@@ -1073,7 +1080,7 @@ class TestNumpy:
 
     def test_numpy_repeated(self):
         data = numpy.array([[[1, 2], [3, 4], [5, 6], [7, 8]]], numpy.int64)  # type: ignore
-        for _ in range(0, 3):
+        for _ in range(3):
             assert (
                 orjson.dumps(
                     data,
@@ -1087,7 +1094,7 @@ class TestNumpy:
 class TestNumpyEquivalence:
     def _test(self, obj):
         assert orjson.dumps(obj, option=orjson.OPT_SERIALIZE_NUMPY) == orjson.dumps(
-            obj.tolist()
+            obj.tolist(),
         )
 
     def test_numpy_uint8(self):
@@ -1113,7 +1120,7 @@ class TestNumpyEquivalence:
 
     def test_numpy_int64(self):
         self._test(
-            numpy.array([-9223372036854775807, 9223372036854775807], numpy.int64)
+            numpy.array([-9223372036854775807, 9223372036854775807], numpy.int64),
         )
 
     @pytest.mark.skip(reason="tolist() conversion results in 3.4028234663852886e38")
@@ -1125,15 +1132,16 @@ class TestNumpyEquivalence:
                     340282346638528859811704183484516925440.0000000000000000,
                 ],
                 numpy.float32,
-            )
+            ),
         )
         self._test(numpy.array([-3.4028235e38, 3.4028235e38], numpy.float32))
 
     def test_numpy_float64(self):
         self._test(
             numpy.array(
-                [-1.7976931348623157e308, 1.7976931348623157e308], numpy.float64
-            )
+                [-1.7976931348623157e308, 1.7976931348623157e308],
+                numpy.float64,
+            ),
         )
 
 

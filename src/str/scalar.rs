@@ -1,15 +1,21 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
+// Copyright ijl (2024-2025)
 
-use crate::str::pyunicode_new::*;
-use crate::typeref::EMPTY_UNICODE;
+use crate::str::pyunicode_new::{
+    pyunicode_ascii, pyunicode_fourbyte, pyunicode_onebyte, pyunicode_twobyte,
+};
 
-#[inline(always)]
-pub fn str_impl_kind_scalar(buf: &str, num_chars: usize) -> *mut pyo3_ffi::PyObject {
+#[inline(never)]
+pub(crate) unsafe fn str_impl_kind_scalar(buf: &str) -> *mut crate::ffi::PyObject {
+    let num_chars = bytecount::num_chars(buf.as_bytes());
+    if buf.len() == num_chars {
+        return pyunicode_ascii(buf.as_ptr(), num_chars);
+    }
     unsafe {
         let len = buf.len();
         assume!(len > 0);
 
-        if unlikely!(*(buf.as_bytes().as_ptr()) > 239) {
+        if *(buf.as_bytes().as_ptr()) > 239 {
             return pyunicode_fourbyte(buf, num_chars);
         }
 
@@ -28,18 +34,5 @@ pub fn str_impl_kind_scalar(buf: &str, num_chars: usize) -> *mut pyo3_ffi::PyObj
         } else {
             pyunicode_onebyte(buf, num_chars)
         }
-    }
-}
-
-#[inline(never)]
-pub fn unicode_from_str(buf: &str) -> *mut pyo3_ffi::PyObject {
-    if unlikely!(buf.is_empty()) {
-        return use_immortal!(EMPTY_UNICODE);
-    }
-    let num_chars = bytecount::num_chars(buf.as_bytes());
-    if buf.len() == num_chars {
-        pyunicode_ascii(buf.as_ptr(), num_chars)
-    } else {
-        str_impl_kind_scalar(buf, num_chars)
     }
 }
