@@ -8,8 +8,8 @@ use crate::serialize::per_type::datetimelike::DateTimeLike;
 use crate::serialize::per_type::{
     BoolSerializer, DataclassGenericSerializer, Date, DateTime, DefaultSerializer, EnumSerializer,
     FloatSerializer, FragmentSerializer, IntSerializer, ListTupleSerializer, NoneSerializer,
-    NumpyScalar, NumpySerializer, PyTorchSerializer, StrSerializer, StrSubclassSerializer, Time, ZeroListSerializer,
-    UUID,
+    NumpyScalar, NumpySerializer, PyTorchSerializer, StrSerializer, StrSubclassSerializer, Time,
+    ZeroListSerializer, UUID,
 };
 use crate::serialize::serializer::PyObjectSerializer;
 use crate::serialize::state::SerializerState;
@@ -335,6 +335,18 @@ fn non_str_str_subclass(key: *mut pyo3_ffi::PyObject) -> Result<CompactString, S
     }
 }
 
+#[cold]
+#[inline(never)]
+fn non_str_numpy_scalar(
+    key: *mut pyo3_ffi::PyObject,
+    opts: crate::opt::Opt,
+) -> Result<CompactString, SerializeError> {
+    let scalar = NumpyScalar::new(key, opts);
+    scalar
+        .try_to_string()
+        .map_err(|_| SerializeError::NumpyUnsupportedDatatype)
+}
+
 #[inline(never)]
 fn non_str_date(key: *mut pyo3_ffi::PyObject) -> Result<CompactString, SerializeError> {
     let mut buf = SmallFixedBuffer::new();
@@ -446,8 +458,8 @@ impl DictNonStrKey {
             }
             ObType::Str => non_str_str(key),
             ObType::StrSubclass => non_str_str_subclass(key),
+            ObType::NumpyScalar => non_str_numpy_scalar(key, opts),
             ObType::Tuple
-            | ObType::NumpyScalar
             | ObType::NumpyArray
             | ObType::Dict
             | ObType::List

@@ -74,7 +74,7 @@ pub fn pyobject_to_obtype(obj: *mut pyo3_ffi::PyObject, opts: Opt) -> ObType {
                     // Verify the type is from torch module
                     let module = pyo3_ffi::PyObject_GetAttrString(
                         ob_type as *mut pyo3_ffi::PyObject,
-                        "__module__\0".as_ptr() as *const core::ffi::c_char
+                        "__module__\0".as_ptr() as *const core::ffi::c_char,
                     );
 
                     if !module.is_null() {

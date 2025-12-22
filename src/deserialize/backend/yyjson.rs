@@ -111,9 +111,15 @@ pub(crate) fn deserialize(
 }
 
 fn read_doc_default(data: &'static str, err: &mut yyjson_read_err) -> *mut yyjson_doc {
-    unsafe { 
+    unsafe {
         let read_flag = YYJSON_READ_ALLOW_INF_AND_NAN;
-        yyjson_read_opts(data.as_ptr() as *mut c_char, data.len(), read_flag, null_mut(), err)
+        yyjson_read_opts(
+            data.as_ptr() as *mut c_char,
+            data.len(),
+            read_flag,
+            null_mut(),
+            err,
+        )
     }
 }
 

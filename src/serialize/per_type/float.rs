@@ -29,7 +29,9 @@ impl Serialize for FloatSerializer {
             if value.is_finite() {
                 serializer.serialize_f64(value)
             } else {
-                Err(serde::ser::Error::custom("Cannot serialize Infinity or NaN"))
+                Err(serde::ser::Error::custom(
+                    "Cannot serialize Infinity or NaN",
+                ))
             }
         }
     }

@@ -208,7 +208,11 @@ impl NumpyArray {
             let num_dimensions = unsafe { (*array).nd as usize };
             let is_zero_dimensional = num_dimensions == 0;
             // For zero-dimensional arrays, treat as 1-dimensional with size 1
-            let effective_dimensions = if is_zero_dimensional { 1 } else { num_dimensions };
+            let effective_dimensions = if is_zero_dimensional {
+                1
+            } else {
+                num_dimensions
+            };
             match ItemType::find(array, ptr) {
                 None => {
                     ffi!(Py_DECREF(capsule));
@@ -316,24 +320,60 @@ impl Serialize for NumpyArray {
         if self.is_zero_dimensional {
             // For zero-dimensional arrays, serialize the single value directly
             match self.kind {
-                ItemType::F64 => DataTypeF64 { obj: unsafe { *(self.data() as *const f64) } }.serialize(serializer),
-                ItemType::F32 => DataTypeF32 { obj: unsafe { *(self.data() as *const f32) } }.serialize(serializer),
-                ItemType::F16 => DataTypeF16 { obj: unsafe { *(self.data() as *const u16) } }.serialize(serializer),
-                ItemType::U64 => DataTypeU64 { obj: unsafe { *(self.data() as *const u64) } }.serialize(serializer),
-                ItemType::U32 => DataTypeU32 { obj: unsafe { *(self.data() as *const u32) } }.serialize(serializer),
-                ItemType::U16 => DataTypeU16 { obj: unsafe { *(self.data() as *const u16) } }.serialize(serializer),
-                ItemType::U8 => DataTypeU8 { obj: unsafe { *(self.data() as *const u8) } }.serialize(serializer),
-                ItemType::I64 => DataTypeI64 { obj: unsafe { *(self.data() as *const i64) } }.serialize(serializer),
-                ItemType::I32 => DataTypeI32 { obj: unsafe { *(self.data() as *const i32) } }.serialize(serializer),
-                ItemType::I16 => DataTypeI16 { obj: unsafe { *(self.data() as *const i16) } }.serialize(serializer),
-                ItemType::I8 => DataTypeI8 { obj: unsafe { *(self.data() as *const i8) } }.serialize(serializer),
-                ItemType::BOOL => DataTypeBool { obj: unsafe { *(self.data() as *const u8) } }.serialize(serializer),
+                ItemType::F64 => DataTypeF64 {
+                    obj: unsafe { *(self.data() as *const f64) },
+                }
+                .serialize(serializer),
+                ItemType::F32 => DataTypeF32 {
+                    obj: unsafe { *(self.data() as *const f32) },
+                }
+                .serialize(serializer),
+                ItemType::F16 => DataTypeF16 {
+                    obj: unsafe { *(self.data() as *const u16) },
+                }
+                .serialize(serializer),
+                ItemType::U64 => DataTypeU64 {
+                    obj: unsafe { *(self.data() as *const u64) },
+                }
+                .serialize(serializer),
+                ItemType::U32 => DataTypeU32 {
+                    obj: unsafe { *(self.data() as *const u32) },
+                }
+                .serialize(serializer),
+                ItemType::U16 => DataTypeU16 {
+                    obj: unsafe { *(self.data() as *const u16) },
+                }
+                .serialize(serializer),
+                ItemType::U8 => DataTypeU8 {
+                    obj: unsafe { *(self.data() as *const u8) },
+                }
+                .serialize(serializer),
+                ItemType::I64 => DataTypeI64 {
+                    obj: unsafe { *(self.data() as *const i64) },
+                }
+                .serialize(serializer),
+                ItemType::I32 => DataTypeI32 {
+                    obj: unsafe { *(self.data() as *const i32) },
+                }
+                .serialize(serializer),
+                ItemType::I16 => DataTypeI16 {
+                    obj: unsafe { *(self.data() as *const i16) },
+                }
+                .serialize(serializer),
+                ItemType::I8 => DataTypeI8 {
+                    obj: unsafe { *(self.data() as *const i8) },
+                }
+                .serialize(serializer),
+                ItemType::BOOL => DataTypeBool {
+                    obj: unsafe { *(self.data() as *const u8) },
+                }
+                .serialize(serializer),
                 ItemType::DATETIME64(unit) => {
                     let val = unsafe { *(self.data() as *const i64) };
                     unit.datetime(val, self.opts)
                         .map_err(NumpyDateTimeError::into_serde_err)?
                         .serialize(serializer)
-                },
+                }
             }
         } else if unlikely!(!(self.depth >= self.dimensions() || self.shape()[self.depth] != 0)) {
             ZeroListSerializer::new().serialize(serializer)
@@ -905,6 +945,91 @@ pub struct NumpyScalar {
 impl NumpyScalar {
     pub fn new(ptr: *mut PyObject, opts: Opt) -> Self {
         NumpyScalar { ptr, opts }
+    }
+
+    #[cold]
+    #[inline(never)]
+    #[cfg_attr(feature = "optimize", optimize(size))]
+    pub fn try_to_string(&self) -> Result<compact_str::CompactString, ()> {
+        unsafe {
+            let ob_type = ob_type!(self.ptr);
+            let scalar_types =
+                unsafe { NUMPY_TYPES.get_or_init(load_numpy_types).unwrap().as_ref() };
+            if ob_type == scalar_types.float64 {
+                let val = (*(self.ptr as *mut NumpyFloat64)).value;
+                Ok(compact_str::CompactString::from(
+                    ryu::Buffer::new().format_finite(val),
+                ))
+            } else if ob_type == scalar_types.float32 {
+                let val = (*(self.ptr as *mut NumpyFloat32)).value;
+                Ok(compact_str::CompactString::from(
+                    ryu::Buffer::new().format_finite(val),
+                ))
+            } else if ob_type == scalar_types.float16 {
+                let val = (*(self.ptr as *mut NumpyFloat16)).value;
+                let as_f32 = half::f16::from_bits(val).to_f32();
+                Ok(compact_str::CompactString::from(
+                    ryu::Buffer::new().format_finite(as_f32),
+                ))
+            } else if ob_type == scalar_types.int64 {
+                let val = (*(self.ptr as *mut NumpyInt64)).value;
+                Ok(compact_str::CompactString::from(
+                    itoa::Buffer::new().format(val),
+                ))
+            } else if ob_type == scalar_types.int32 {
+                let val = (*(self.ptr as *mut NumpyInt32)).value;
+                Ok(compact_str::CompactString::from(
+                    itoa::Buffer::new().format(val),
+                ))
+            } else if ob_type == scalar_types.int16 {
+                let val = (*(self.ptr as *mut NumpyInt16)).value;
+                Ok(compact_str::CompactString::from(
+                    itoa::Buffer::new().format(val),
+                ))
+            } else if ob_type == scalar_types.int8 {
+                let val = (*(self.ptr as *mut NumpyInt8)).value;
+                Ok(compact_str::CompactString::from(
+                    itoa::Buffer::new().format(val),
+                ))
+            } else if ob_type == scalar_types.uint64 {
+                let val = (*(self.ptr as *mut NumpyUint64)).value;
+                Ok(compact_str::CompactString::from(
+                    itoa::Buffer::new().format(val),
+                ))
+            } else if ob_type == scalar_types.uint32 {
+                let val = (*(self.ptr as *mut NumpyUint32)).value;
+                Ok(compact_str::CompactString::from(
+                    itoa::Buffer::new().format(val),
+                ))
+            } else if ob_type == scalar_types.uint16 {
+                let val = (*(self.ptr as *mut NumpyUint16)).value;
+                Ok(compact_str::CompactString::from(
+                    itoa::Buffer::new().format(val),
+                ))
+            } else if ob_type == scalar_types.uint8 {
+                let val = (*(self.ptr as *mut NumpyUint8)).value;
+                Ok(compact_str::CompactString::from(
+                    itoa::Buffer::new().format(val),
+                ))
+            } else if ob_type == scalar_types.bool_ {
+                let val = (*(self.ptr as *mut NumpyBool)).value;
+                if val {
+                    Ok(compact_str::CompactString::const_new("true"))
+                } else {
+                    Ok(compact_str::CompactString::const_new("false"))
+                }
+            } else if ob_type == scalar_types.datetime64 {
+                let unit = NumpyDatetimeUnit::from_pyobject(self.ptr);
+                let obj = &*(self.ptr as *mut NumpyDatetime64);
+                let dt = unit.datetime(obj.value, self.opts).map_err(|_| ())?;
+                let mut buf = SmallFixedBuffer::new();
+                let _ = dt.write_buf(&mut buf, self.opts);
+                let key_as_str = str_from_slice!(buf.as_ptr(), buf.len());
+                Ok(compact_str::CompactString::from(key_as_str))
+            } else {
+                Err(())
+            }
+        }
     }
 }
 

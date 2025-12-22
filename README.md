@@ -327,6 +327,10 @@ the standard library serializes `str`, `int`, `float`, `bool` or `None` by
 default. orjson benchmarks as being faster at serializing non-`str` keys
 than other libraries. This option is slower for `str` keys than the default.
 
+When combined with `OPT_SERIALIZE_NUMPY`, numpy scalar types (e.g.,
+`numpy.int64`, `numpy.float64`, `numpy.bool_`, `numpy.datetime64`, etc.)
+can also be used as dictionary keys.
+
 ```python
 >>> import orjson, datetime, uuid
 >>> orjson.dumps(
