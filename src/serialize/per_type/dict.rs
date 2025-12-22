@@ -223,41 +223,91 @@ impl Serialize for Dict {
     where
         S: Serializer,
     {
-        let mut pos = 0;
-        let mut next_key: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
-        let mut next_value: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
+        // For free-threaded Python (PEP 703), we need to collect all items
+        // within a critical section first, then serialize them outside.
+        // This ensures thread-safe dict iteration.
+        #[cfg(Py_GIL_DISABLED)]
+        {
+            let len = ffi!(Py_SIZE(self.ptr)) as usize;
+            assume!(len > 0);
 
-        pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
+            // Collect items within critical section
+            let items: SmallVec<[(&str, *mut pyo3_ffi::PyObject); 8]> =
+                with_critical_section!(self.ptr, {
+                    let mut pos = 0;
+                    let mut next_key: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
+                    let mut next_value: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
+                    let mut items: SmallVec<[(&str, *mut pyo3_ffi::PyObject); 8]> =
+                        SmallVec::with_capacity(len);
 
-        let mut map = serializer.serialize_map(None).unwrap();
+                    pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
 
-        let len = ffi!(Py_SIZE(self.ptr)) as usize;
-        assume!(len > 0);
+                    for _ in 0..len {
+                        let key = next_key;
+                        let value = next_value;
 
-        for _ in 0..len {
-            let key = next_key;
-            let value = next_value;
+                        pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
+
+                        // key
+                        let key_ob_type = ob_type!(key);
+                        if unlikely!(!is_class_by_type!(key_ob_type, STR_TYPE)) {
+                            return Err(serde::ser::Error::custom(SerializeError::KeyMustBeStr));
+                        }
+                        let tmp = unicode_to_str(key);
+                        if unlikely!(tmp.is_none()) {
+                            return Err(serde::ser::Error::custom(SerializeError::InvalidStr));
+                        };
+                        items.push((tmp.unwrap(), value));
+                    }
+                    Ok::<_, S::Error>(items)
+                })?;
+
+            // Serialize outside critical section
+            let mut map = serializer.serialize_map(None).unwrap();
+            for (key_as_str, value) in items {
+                impl_serialize_entry!(map, self, key_as_str, value);
+            }
+            map.end()
+        }
+
+        #[cfg(not(Py_GIL_DISABLED))]
+        {
+            let mut pos = 0;
+            let mut next_key: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
+            let mut next_value: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
 
             pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
 
-            // key
-            let key_as_str = {
-                let key_ob_type = ob_type!(key);
-                if unlikely!(!is_class_by_type!(key_ob_type, STR_TYPE)) {
-                    err!(SerializeError::KeyMustBeStr)
-                }
-                let tmp = unicode_to_str(key);
-                if unlikely!(tmp.is_none()) {
-                    err!(SerializeError::InvalidStr)
+            let mut map = serializer.serialize_map(None).unwrap();
+
+            let len = ffi!(Py_SIZE(self.ptr)) as usize;
+            assume!(len > 0);
+
+            for _ in 0..len {
+                let key = next_key;
+                let value = next_value;
+
+                pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
+
+                // key
+                let key_as_str = {
+                    let key_ob_type = ob_type!(key);
+                    if unlikely!(!is_class_by_type!(key_ob_type, STR_TYPE)) {
+                        err!(SerializeError::KeyMustBeStr)
+                    }
+                    let tmp = unicode_to_str(key);
+                    if unlikely!(tmp.is_none()) {
+                        err!(SerializeError::InvalidStr)
+                    };
+                    tmp.unwrap()
                 };
-                tmp.unwrap()
-            };
 
-            // value
-            impl_serialize_entry!(map, self, key_as_str, value);
+                // value
+                impl_serialize_entry!(map, self, key_as_str, value);
+            }
+
+            map.end()
         }
-
-        map.end()
     }
 }
 
@@ -273,33 +323,37 @@ impl Serialize for DictSortedKey {
     where
         S: Serializer,
     {
-        let mut pos = 0;
-        let mut next_key: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
-        let mut next_value: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
-
-        pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
-
         let len = ffi!(Py_SIZE(self.ptr)) as usize;
         assume!(len > 0);
 
+        // For free-threaded Python (PEP 703), collect items within critical section
         let mut items: SmallVec<[(&str, *mut pyo3_ffi::PyObject); 8]> =
-            SmallVec::with_capacity(len);
+            with_critical_section!(self.ptr, {
+                let mut pos = 0;
+                let mut next_key: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
+                let mut next_value: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
+                let mut items: SmallVec<[(&str, *mut pyo3_ffi::PyObject); 8]> =
+                    SmallVec::with_capacity(len);
 
-        for _ in 0..len as usize {
-            let key = next_key;
-            let value = next_value;
+                pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
 
-            pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
+                for _ in 0..len as usize {
+                    let key = next_key;
+                    let value = next_value;
 
-            if unlikely!(unsafe { ob_type!(key) != STR_TYPE }) {
-                err!(SerializeError::KeyMustBeStr)
-            }
-            let data = unicode_to_str(key);
-            if unlikely!(data.is_none()) {
-                err!(SerializeError::InvalidStr)
-            }
-            items.push((data.unwrap(), value));
-        }
+                    pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
+
+                    if unlikely!(unsafe { ob_type!(key) != STR_TYPE }) {
+                        return Err(serde::ser::Error::custom(SerializeError::KeyMustBeStr));
+                    }
+                    let data = unicode_to_str(key);
+                    if unlikely!(data.is_none()) {
+                        return Err(serde::ser::Error::custom(SerializeError::InvalidStr));
+                    }
+                    items.push((data.unwrap(), value));
+                }
+                Ok::<_, S::Error>(items)
+            })?;
 
         items.sort_unstable_by(|a, b| a.0.cmp(b.0));
 
@@ -465,39 +519,43 @@ impl Serialize for DictNonStrKey {
     where
         S: Serializer,
     {
-        let mut pos = 0;
-        let mut next_key: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
-        let mut next_value: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
-
-        pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
-
         let opts = self.state.opts() & NOT_PASSTHROUGH;
 
         let len = ffi!(Py_SIZE(self.ptr)) as usize;
         assume!(len > 0);
 
+        // For free-threaded Python (PEP 703), collect items within critical section
         let mut items: SmallVec<[(CompactString, *mut pyo3_ffi::PyObject); 8]> =
-            SmallVec::with_capacity(len);
+            with_critical_section!(self.ptr, {
+                let mut pos = 0;
+                let mut next_key: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
+                let mut next_value: *mut pyo3_ffi::PyObject = core::ptr::null_mut();
+                let mut items: SmallVec<[(CompactString, *mut pyo3_ffi::PyObject); 8]> =
+                    SmallVec::with_capacity(len);
 
-        for _ in 0..len {
-            let key = next_key;
-            let value = next_value;
+                pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
 
-            pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
+                for _ in 0..len {
+                    let key = next_key;
+                    let value = next_value;
 
-            if is_type!(ob_type!(key), STR_TYPE) {
-                let uni = unicode_to_str(key);
-                if unlikely!(uni.is_none()) {
-                    err!(SerializeError::InvalidStr)
+                    pydict_next!(self.ptr, &mut pos, &mut next_key, &mut next_value);
+
+                    if is_type!(ob_type!(key), STR_TYPE) {
+                        let uni = unicode_to_str(key);
+                        if unlikely!(uni.is_none()) {
+                            return Err(serde::ser::Error::custom(SerializeError::InvalidStr));
+                        }
+                        items.push((CompactString::from(uni.unwrap()), value));
+                    } else {
+                        match Self::pyobject_to_string(key, opts) {
+                            Ok(key_as_str) => items.push((key_as_str, value)),
+                            Err(err) => return Err(serde::ser::Error::custom(err)),
+                        }
+                    }
                 }
-                items.push((CompactString::from(uni.unwrap()), value));
-            } else {
-                match Self::pyobject_to_string(key, opts) {
-                    Ok(key_as_str) => items.push((key_as_str, value)),
-                    Err(err) => err!(err),
-                }
-            }
-        }
+                Ok::<_, S::Error>(items)
+            })?;
 
         if opt_enabled!(opts, SORT_KEYS) {
             sort_non_str_dict_items(&mut items);

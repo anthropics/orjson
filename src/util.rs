@@ -337,3 +337,45 @@ macro_rules! unreachable_unchecked {
         unsafe { core::hint::unreachable_unchecked() }
     };
 }
+
+// Critical section support for free-threaded Python (PEP 703)
+// Uses a scope guard pattern to ensure cleanup even on early returns/errors
+#[cfg(Py_GIL_DISABLED)]
+pub struct CriticalSectionGuard {
+    cs: pyo3_ffi::PyCriticalSection,
+}
+
+#[cfg(Py_GIL_DISABLED)]
+impl CriticalSectionGuard {
+    #[inline]
+    pub unsafe fn new(obj: *mut pyo3_ffi::PyObject) -> Self {
+        let mut cs = pyo3_ffi::PyCriticalSection::default();
+        pyo3_ffi::PyCriticalSection_Begin(&mut cs, obj);
+        Self { cs }
+    }
+}
+
+#[cfg(Py_GIL_DISABLED)]
+impl Drop for CriticalSectionGuard {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            pyo3_ffi::PyCriticalSection_End(&mut self.cs);
+        }
+    }
+}
+
+#[cfg(Py_GIL_DISABLED)]
+macro_rules! with_critical_section {
+    ($obj:expr, $body:expr) => {{
+        let _guard = unsafe { crate::util::CriticalSectionGuard::new($obj) };
+        $body
+    }};
+}
+
+#[cfg(not(Py_GIL_DISABLED))]
+macro_rules! with_critical_section {
+    ($obj:expr, $body:expr) => {{
+        $body
+    }};
+}

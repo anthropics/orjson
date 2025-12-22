@@ -182,10 +182,15 @@ pub unsafe extern "C" fn PyInit_orjson() -> *mut PyModuleDef {
                 slot: Py_mod_multiple_interpreters,
                 value: Py_MOD_MULTIPLE_INTERPRETERS_NOT_SUPPORTED,
             },
-            #[cfg(Py_3_13)]
+            #[cfg(all(Py_3_13, not(Py_GIL_DISABLED)))]
             PyModuleDef_Slot {
                 slot: Py_mod_gil,
                 value: Py_MOD_GIL_USED,
+            },
+            #[cfg(all(Py_3_13, Py_GIL_DISABLED))]
+            PyModuleDef_Slot {
+                slot: Py_mod_gil,
+                value: Py_MOD_GIL_NOT_USED,
             },
             PyModuleDef_Slot {
                 slot: 0,
