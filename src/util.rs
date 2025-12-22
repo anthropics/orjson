@@ -337,3 +337,23 @@ macro_rules! unreachable_unchecked {
         unsafe { core::hint::unreachable_unchecked() }
     };
 }
+
+/// Critical section for free-threaded Python (PEP 703)
+/// In GIL-enabled builds, this is a no-op
+#[cfg(Py_GIL_DISABLED)]
+macro_rules! with_critical_section {
+    ($obj:expr, $body:block) => {{
+        let mut cs = pyo3_ffi::PyCriticalSection::default();
+        unsafe { pyo3_ffi::PyCriticalSection_Begin(&mut cs, $obj) };
+        let result = $body;
+        unsafe { pyo3_ffi::PyCriticalSection_End(&mut cs) };
+        result
+    }};
+}
+
+#[cfg(not(Py_GIL_DISABLED))]
+macro_rules! with_critical_section {
+    ($obj:expr, $body:block) => {
+        $body
+    };
+}
