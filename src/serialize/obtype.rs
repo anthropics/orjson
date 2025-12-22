@@ -55,7 +55,7 @@ pub(crate) fn pyobject_to_obtype(obj: *mut crate::ffi::PyObject, opts: Opt) -> O
         ObType::Datetime
     } else {
         // PyTorch tensor detection
-        if unlikely!(opt_enabled!(opts, SERIALIZE_NUMPY)) {
+        if opt_enabled!(opts, SERIALIZE_NUMPY) {
             unsafe {
                 // Check for PyTorch tensor methods
                 let has_numpy = pyo3_ffi::PyObject_HasAttrString(

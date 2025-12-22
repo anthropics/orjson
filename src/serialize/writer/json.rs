@@ -123,15 +123,17 @@ where
         #[cfg(yyjson_allow_inf_and_nan)]
         {
             if value.is_infinite() {
+                self.writer.reserve(16);
                 if value.is_sign_positive() {
-                    unsafe { self.writer.write_reserved_fragment(b"Infinity").unwrap() };
+                    unsafe { self.writer.put_slice(b"Infinity") };
                     Ok(())
                 } else {
-                    unsafe { self.writer.write_reserved_fragment(b"-Infinity").unwrap() };
+                    unsafe { self.writer.put_slice(b"-Infinity") };
                     Ok(())
                 }
             } else if value.is_nan() {
-                unsafe { self.writer.write_reserved_fragment(b"NaN").unwrap() };
+                self.writer.reserve(8);
+                unsafe { self.writer.put_slice(b"NaN") };
                 Ok(())
             } else {
                 self.formatter
@@ -156,15 +158,17 @@ where
         #[cfg(yyjson_allow_inf_and_nan)]
         {
             if value.is_infinite() {
+                self.writer.reserve(16);
                 if value.is_sign_positive() {
-                    unsafe { self.writer.write_reserved_fragment(b"Infinity").unwrap() };
+                    unsafe { self.writer.put_slice(b"Infinity") };
                     Ok(())
                 } else {
-                    unsafe { self.writer.write_reserved_fragment(b"-Infinity").unwrap() };
+                    unsafe { self.writer.put_slice(b"-Infinity") };
                     Ok(())
                 }
             } else if value.is_nan() {
-                unsafe { self.writer.write_reserved_fragment(b"NaN").unwrap() };
+                self.writer.reserve(8);
+                unsafe { self.writer.put_slice(b"NaN") };
                 Ok(())
             } else {
                 self.formatter
