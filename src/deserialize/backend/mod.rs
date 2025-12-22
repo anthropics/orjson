@@ -7,7 +7,7 @@ mod json;
 mod yyjson;
 
 #[cfg(feature = "yyjson")]
-pub(crate) use yyjson::deserialize;
+pub(crate) use yyjson::{deserialize, DeserializeResult};
 
 #[cfg(not(feature = "yyjson"))]
-pub(crate) use json::deserialize;
+pub(crate) use json::{deserialize, DeserializeResult};

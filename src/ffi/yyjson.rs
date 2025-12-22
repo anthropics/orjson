@@ -20,6 +20,7 @@ pub struct yyjson_alc {
 }
 pub type yyjson_read_code = u32;
 pub const YYJSON_READ_SUCCESS: yyjson_read_code = 0;
+pub const YYJSON_READ_STOP_WHEN_DONE: u32 = 1 << 1;
 pub const YYJSON_READ_ALLOW_INF_AND_NAN: u32 = 1 << 4;
 #[repr(C)]
 pub struct yyjson_read_err {

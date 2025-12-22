@@ -123,6 +123,23 @@ pub unsafe extern "C" fn orjson_init_exec(mptr: *mut PyObject) -> c_int {
             add!(mptr, "loads\0", func);
         }
 
+        {
+            let loads_next_doc = "loads_next(obj, /)\n--\n\nDeserialize the next JSON document from a buffer and return (object, bytes_consumed).\0";
+
+            let wrapped_loads_next = PyMethodDef {
+                ml_name: "loads_next\0".as_ptr() as *const c_char,
+                ml_meth: PyMethodDefPointer { PyCFunction: loads_next },
+                ml_flags: METH_O,
+                ml_doc: loads_next_doc.as_ptr() as *const c_char,
+            };
+            let func = PyCFunction_NewEx(
+                Box::into_raw(Box::new(wrapped_loads_next)),
+                null_mut(),
+                PyUnicode_InternFromString("orjson\0".as_ptr() as *const c_char),
+            );
+            add!(mptr, "loads_next\0", func);
+        }
+
         add!(mptr, "Fragment\0", typeref::FRAGMENT_TYPE as *mut PyObject);
 
         opt!(mptr, "OPT_APPEND_NEWLINE\0", opt::APPEND_NEWLINE);
@@ -317,6 +334,29 @@ pub unsafe extern "C" fn loads(_self: *mut PyObject, obj: *mut PyObject) -> *mut
     match crate::deserialize::deserialize(obj) {
         Ok(val) => val.as_ptr(),
         Err(err) => raise_loads_exception(err),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn loads_next(_self: *mut PyObject, obj: *mut PyObject) -> *mut PyObject {
+    unsafe {
+        // Reject str type - only accept bytes, bytearray, memoryview
+        if (*obj).ob_type == typeref::STR_TYPE {
+            return raise_loads_exception(deserialize::DeserializeError::invalid(
+                std::borrow::Cow::Borrowed("Input must be bytes, bytearray, or memoryview, not str"),
+            ));
+        }
+
+        match crate::deserialize::deserialize_next(obj) {
+            Ok(result) => {
+                let tuple = PyTuple_New(2);
+                let bytes_read = PyLong_FromSize_t(result.bytes_read);
+                PyTuple_SET_ITEM(tuple, 0, result.obj.as_ptr());
+                PyTuple_SET_ITEM(tuple, 1, bytes_read);
+                tuple
+            }
+            Err(err) => raise_loads_exception(err),
+        }
     }
 }
 

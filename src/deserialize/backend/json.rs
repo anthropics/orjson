@@ -9,17 +9,27 @@ use smallvec::SmallVec;
 use std::borrow::Cow;
 use std::fmt;
 
+/// Result of deserialization containing the parsed object and bytes consumed
+pub struct DeserializeResult {
+    pub obj: NonNull<pyo3_ffi::PyObject>,
+    pub bytes_read: usize,
+}
+
 pub(crate) fn deserialize(
     data: &'static str,
-) -> Result<NonNull<pyo3_ffi::PyObject>, DeserializeError<'static>> {
+    stop_when_done: bool,
+) -> Result<DeserializeResult, DeserializeError<'static>> {
     let mut deserializer = serde_json::Deserializer::from_str(data);
     let seed = JsonValue {};
     match seed.deserialize(&mut deserializer) {
         Ok(obj) => {
-            deserializer.end().map_err(|e| {
-                DeserializeError::from_json(Cow::Owned(e.to_string()), e.line(), e.column(), data)
-            })?;
-            Ok(obj)
+            let bytes_read = deserializer.byte_offset();
+            if !stop_when_done {
+                deserializer.end().map_err(|e| {
+                    DeserializeError::from_json(Cow::Owned(e.to_string()), e.line(), e.column(), data)
+                })?;
+            }
+            Ok(DeserializeResult { obj, bytes_read })
         }
         Err(e) => Err(DeserializeError::from_json(
             Cow::Owned(e.to_string()),

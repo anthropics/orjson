@@ -9,6 +9,16 @@ use core::ffi::c_char;
 use core::ptr::{null, null_mut, NonNull};
 use std::borrow::Cow;
 
+/// Result of deserialization containing the parsed object and bytes consumed
+pub struct DeserializeResult {
+    pub obj: NonNull<pyo3_ffi::PyObject>,
+    pub bytes_read: usize,
+}
+
+fn unsafe_yyjson_doc_get_read_size(doc: *mut yyjson_doc) -> usize {
+    unsafe { (*doc).dat_read }
+}
+
 const YYJSON_TAG_BIT: u8 = 8;
 
 const YYJSON_VAL_SIZE: usize = core::mem::size_of::<yyjson_val>();
@@ -59,22 +69,24 @@ fn unsafe_yyjson_get_next_non_container(val: *mut yyjson_val) -> *mut yyjson_val
 
 pub(crate) fn deserialize(
     data: &'static str,
-) -> Result<NonNull<pyo3_ffi::PyObject>, DeserializeError<'static>> {
+    stop_when_done: bool,
+) -> Result<DeserializeResult, DeserializeError<'static>> {
     let mut err = yyjson_read_err {
         code: YYJSON_READ_SUCCESS,
         msg: null(),
         pos: 0,
     };
     let doc = if yyjson_read_max_memory_usage(data.len()) < YYJSON_BUFFER_SIZE {
-        read_doc_with_buffer(data, &mut err)
+        read_doc_with_buffer(data, &mut err, stop_when_done)
     } else {
-        read_doc_default(data, &mut err)
+        read_doc_default(data, &mut err, stop_when_done)
     };
     if unlikely!(doc.is_null()) {
         let msg: Cow<str> = unsafe { core::ffi::CStr::from_ptr(err.msg).to_string_lossy() };
         Err(DeserializeError::from_yyjson(msg, err.pos as i64, data))
     } else {
         let val = yyjson_doc_get_root(doc);
+        let bytes_read = unsafe_yyjson_doc_get_read_size(doc);
 
         if unlikely!(!unsafe_yyjson_is_ctn(val)) {
             let pyval = match ElementType::from_tag(val) {
@@ -89,14 +101,14 @@ pub(crate) fn deserialize(
                 ElementType::Object => unreachable_unchecked!(),
             };
             unsafe { yyjson_doc_free(doc) };
-            Ok(pyval)
+            Ok(DeserializeResult { obj: pyval, bytes_read })
         } else if is_yyjson_tag!(val, TAG_ARRAY) {
             let pyval = nonnull!(ffi!(PyList_New(unsafe_yyjson_get_len(val) as isize)));
             if unsafe_yyjson_get_len(val) > 0 {
                 populate_yy_array(pyval.as_ptr(), val);
             }
             unsafe { yyjson_doc_free(doc) };
-            Ok(pyval)
+            Ok(DeserializeResult { obj: pyval, bytes_read })
         } else {
             let pyval = nonnull!(ffi!(_PyDict_NewPresized(
                 unsafe_yyjson_get_len(val) as isize
@@ -105,21 +117,27 @@ pub(crate) fn deserialize(
                 populate_yy_object(pyval.as_ptr(), val);
             }
             unsafe { yyjson_doc_free(doc) };
-            Ok(pyval)
+            Ok(DeserializeResult { obj: pyval, bytes_read })
         }
     }
 }
 
-fn read_doc_default(data: &'static str, err: &mut yyjson_read_err) -> *mut yyjson_doc {
-    unsafe { 
-        let read_flag = YYJSON_READ_ALLOW_INF_AND_NAN;
+fn read_doc_default(data: &'static str, err: &mut yyjson_read_err, stop_when_done: bool) -> *mut yyjson_doc {
+    unsafe {
+        let mut read_flag = YYJSON_READ_ALLOW_INF_AND_NAN;
+        if stop_when_done {
+            read_flag |= YYJSON_READ_STOP_WHEN_DONE;
+        }
         yyjson_read_opts(data.as_ptr() as *mut c_char, data.len(), read_flag, null_mut(), err)
     }
 }
 
-fn read_doc_with_buffer(data: &'static str, err: &mut yyjson_read_err) -> *mut yyjson_doc {
+fn read_doc_with_buffer(data: &'static str, err: &mut yyjson_read_err, stop_when_done: bool) -> *mut yyjson_doc {
     unsafe {
-        let read_flag = YYJSON_READ_ALLOW_INF_AND_NAN;
+        let mut read_flag = YYJSON_READ_ALLOW_INF_AND_NAN;
+        if stop_when_done {
+            read_flag |= YYJSON_READ_STOP_WHEN_DONE;
+        }
         yyjson_read_opts(
             data.as_ptr() as *mut c_char,
             data.len(),

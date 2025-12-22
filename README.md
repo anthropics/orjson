@@ -617,6 +617,58 @@ It raises `JSONDecodeError` if a combination of array or object recurses
 `JSONDecodeError` is a subclass of `json.JSONDecodeError` and `ValueError`.
 This is for compatibility with the standard library.
 
+### Deserialize Next
+
+```python
+def loads_next(__obj: Union[bytes, bytearray, memoryview]) -> tuple[Any, int]: ...
+```
+
+`loads_next()` deserializes the next JSON document from a buffer and returns
+a tuple of `(parsed_object, bytes_consumed)`. This enables parsing NDJSON
+(newline-delimited JSON), JSONL, or concatenated JSON documents.
+
+Unlike `loads()`, this function:
+- Only accepts `bytes`, `bytearray`, or `memoryview` input (not `str`)
+- Stops parsing after the first complete JSON document
+- Returns both the parsed object and the number of bytes consumed
+
+Example parsing JSONL:
+
+```python
+>>> import orjson
+>>> data = b'{"id":1}\n{"id":2}\n{"id":3}\n'
+>>> results = []
+>>> offset = 0
+>>> while offset < len(data):
+...     remaining = data[offset:]
+...     stripped = remaining.lstrip()
+...     if not stripped:
+...         break
+...     offset += len(remaining) - len(stripped)
+...     obj, consumed = orjson.loads_next(data[offset:])
+...     results.append(obj)
+...     offset += consumed
+>>> results
+[{'id': 1}, {'id': 2}, {'id': 3}]
+```
+
+Example parsing concatenated JSON:
+
+```python
+>>> import orjson
+>>> data = b'{"a":1}{"b":2}[1,2,3]'
+>>> results = []
+>>> offset = 0
+>>> while offset < len(data):
+...     obj, consumed = orjson.loads_next(data[offset:])
+...     results.append(obj)
+...     offset += consumed
+>>> results
+[{'a': 1}, {'b': 2}, [1, 2, 3]]
+```
+
+The function raises `JSONDecodeError` on invalid JSON or empty input.
+
 ## Types
 
 ### dataclass
@@ -1069,9 +1121,10 @@ level above this.
 
 No. `bytes` is the correct type for a serialized blob.
 
-### Will it support NDJSON or JSONL?
+### Does it support NDJSON or JSONL?
 
-No. [orjsonl](https://github.com/umarbutler/orjsonl) may be appropriate.
+Yes. Use `loads_next()` to parse NDJSON or JSONL data. See the
+[Deserialize Next](#deserialize-next) section for examples.
 
 ### Will it support JSON5 or RJSON?
 
