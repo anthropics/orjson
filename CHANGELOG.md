@@ -1,9 +1,5 @@
 # Changelog
 
-## 3.10.14-post5
-
-- no code changes, just added 3.14 to our wheel build.
-
 ## 3.10.14-post4
 
 - fix handling for MagicMocks by checking torch tensor module name 
