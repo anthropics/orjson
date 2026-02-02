@@ -6,6 +6,7 @@ use core::ptr::NonNull;
 pub enum SerializeError {
     DatetimeLibraryUnsupported,
     DefaultRecursionLimit,
+    FloatNotFinite,
     Integer53Bits,
     Integer64Bits,
     InvalidStr,
@@ -34,6 +35,9 @@ impl std::fmt::Display for SerializeError {
             ),
             SerializeError::DefaultRecursionLimit => {
                 write!(f, "default serializer exceeds recursion limit")
+            }
+            SerializeError::FloatNotFinite => {
+                write!(f, "Cannot serialize Infinity or NaN")
             }
             SerializeError::Integer53Bits => write!(f, "Integer exceeds 53-bit range"),
             SerializeError::Integer64Bits => write!(f, "Integer exceeds 64-bit range"),
