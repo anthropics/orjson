@@ -382,10 +382,17 @@ fn non_str_uuid(key: *mut pyo3_ffi::PyObject) -> Result<CompactString, Serialize
 
 #[cold]
 #[inline(never)]
-fn non_str_float(key: *mut pyo3_ffi::PyObject) -> Result<CompactString, SerializeError> {
+fn non_str_float(
+    key: *mut pyo3_ffi::PyObject,
+    opts: crate::opt::Opt,
+) -> Result<CompactString, SerializeError> {
     let val = ffi!(PyFloat_AS_DOUBLE(key));
     if !val.is_finite() {
-        Ok(CompactString::const_new("null"))
+        if unlikely!(opt_enabled!(opts, crate::opt::DISALLOW_NAN)) {
+            Err(SerializeError::FloatNotFinite)
+        } else {
+            Ok(CompactString::const_new("null"))
+        }
     } else {
         Ok(CompactString::from(ryu::Buffer::new().format_finite(val)))
     }
@@ -432,7 +439,7 @@ impl DictNonStrKey {
                 }
             }
             ObType::Int => non_str_int(key),
-            ObType::Float => non_str_float(key),
+            ObType::Float => non_str_float(key, opts),
             ObType::Datetime => non_str_datetime(key, opts),
             ObType::Date => non_str_date(key),
             ObType::Time => non_str_time(key, opts),
