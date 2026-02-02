@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.10.14-post5
+
+### Added
+
+- `OPT_DISALLOW_NAN` option flag for `dumps()`. When set, raises `JSONEncodeError` if a float value is NaN, Infinity, or -Infinity. Default behavior (allowing NaN/Infinity) is unchanged.
+
 ## 3.10.14-post4
 
 - fix handling for MagicMocks by checking torch tensor module name 
