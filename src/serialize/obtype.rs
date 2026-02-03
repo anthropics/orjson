@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: (Apache-2.0 OR MIT)
 // Copyright ijl (2020-2025), Aviram Hassan (2020)
 
+use crate::ffi::{PyObject_HasAttrString, PyStrRef, PyTypeObject};
 use crate::opt::{
     Opt, PASSTHROUGH_DATACLASS, PASSTHROUGH_DATETIME, PASSTHROUGH_SUBCLASS, SERIALIZE_NUMPY,
 };
 use crate::serialize::per_type::{is_numpy_array, is_numpy_scalar};
 use crate::typeref::{
     BOOL_TYPE, DATACLASS_FIELDS_STR, DATE_TYPE, DATETIME_TYPE, DICT_TYPE, ENUM_TYPE, FLOAT_TYPE,
-    FRAGMENT_TYPE, INT_TYPE, LIST_TYPE, NONE_TYPE, PYTORCH_TENSOR_TYPE, STR_TYPE, TIME_TYPE,
-    TUPLE_TYPE, UUID_TYPE,
+    FRAGMENT_TYPE, INT_TYPE, LIST_TYPE, NONE_TYPE, STR_TYPE, TIME_TYPE, TUPLE_TYPE, UUID_TYPE,
 };
 
 #[repr(u32)]
@@ -110,10 +110,40 @@ pub(crate) fn pyobject_to_obtype_unlikely(
             return ObType::NumpyScalar;
         } else if is_numpy_array(ob_type) {
             return ObType::NumpyArray;
-        } else if is_class_by_type!(ob_type, PYTORCH_TENSOR_TYPE) {
+        } else if is_pytorch_tensor(ob_type) {
             return ObType::PyTorchTensor;
         }
     }
 
     ObType::Unknown
+}
+
+#[cold]
+fn is_pytorch_tensor(ob_type: *mut PyTypeObject) -> bool {
+    unsafe {
+        // Check if the type's __module__ starts with "torch" first,
+        // to avoid calling HasAttr on types like MagicMock
+        let ob_type_ptr = ob_type.cast::<crate::ffi::PyObject>();
+        let module = crate::ffi::PyObject_GetAttrString(ob_type_ptr, c"__module__".as_ptr());
+        if module.is_null() {
+            crate::ffi::PyErr_Clear();
+            return false;
+        }
+        let starts_with_torch = match PyStrRef::from_ptr(module) {
+            Ok(s) => match s.as_str() {
+                Some(s) => s.starts_with("torch"),
+                None => false,
+            },
+            Err(_) => false,
+        };
+        ffi!(Py_DECREF(module));
+        if !starts_with_torch {
+            return false;
+        }
+
+        // Verify it has the expected tensor methods
+        PyObject_HasAttrString(ob_type_ptr, c"numpy".as_ptr()) == 1
+            && PyObject_HasAttrString(ob_type_ptr, c"cpu".as_ptr()) == 1
+            && PyObject_HasAttrString(ob_type_ptr, c"detach".as_ptr()) == 1
+    }
 }
