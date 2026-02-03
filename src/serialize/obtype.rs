@@ -121,8 +121,9 @@ pub(crate) fn pyobject_to_obtype_unlikely(
 #[cold]
 fn is_pytorch_tensor(ob_type: *mut PyTypeObject) -> bool {
     unsafe {
-        // Check if the type's __module__ starts with "torch" first,
-        // to avoid calling HasAttr on types like MagicMock
+        // Check __module__ starts with "torch" BEFORE calling HasAttr.
+        // This is important because MagicMock objects auto-respond True to
+        // HasAttr calls, which would cause false positives.
         let ob_type_ptr = ob_type.cast::<crate::ffi::PyObject>();
         let module = crate::ffi::PyObject_GetAttrString(ob_type_ptr, c"__module__".as_ptr());
         if module.is_null() {
@@ -141,7 +142,7 @@ fn is_pytorch_tensor(ob_type: *mut PyTypeObject) -> bool {
             return false;
         }
 
-        // Verify it has the expected tensor methods
+        // Only after confirming torch module, verify tensor methods
         PyObject_HasAttrString(ob_type_ptr, c"numpy".as_ptr()) == 1
             && PyObject_HasAttrString(ob_type_ptr, c"cpu".as_ptr()) == 1
             && PyObject_HasAttrString(ob_type_ptr, c"detach".as_ptr()) == 1
