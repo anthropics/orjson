@@ -5,3 +5,4 @@ psutil;(sys_platform=="linux" or sys_platform == "macos") and platform_machine==
 pytest
 python-dateutil >=2,<3;python_version<"3.15" and implementation_name=="cpython"
 pytz
+torch;(platform_machine=="x86_64" or (platform_machine=="aarch64" and sys_platform == "linux")) and python_version<"3.14" and implementation_name=="cpython"

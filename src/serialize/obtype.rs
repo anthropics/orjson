@@ -7,7 +7,8 @@ use crate::opt::{
 use crate::serialize::per_type::{is_numpy_array, is_numpy_scalar};
 use crate::typeref::{
     BOOL_TYPE, DATACLASS_FIELDS_STR, DATE_TYPE, DATETIME_TYPE, DICT_TYPE, ENUM_TYPE, FLOAT_TYPE,
-    FRAGMENT_TYPE, INT_TYPE, LIST_TYPE, NONE_TYPE, STR_TYPE, TIME_TYPE, TUPLE_TYPE, UUID_TYPE,
+    FRAGMENT_TYPE, INT_TYPE, LIST_TYPE, NONE_TYPE, PYTORCH_TENSOR_TYPE, STR_TYPE, TIME_TYPE,
+    TUPLE_TYPE, UUID_TYPE,
 };
 
 #[repr(u32)]
@@ -27,6 +28,7 @@ pub(crate) enum ObType {
     Dataclass,
     NumpyScalar,
     NumpyArray,
+    PyTorchTensor,
     Enum,
     StrSubclass,
     Fragment,
@@ -108,6 +110,8 @@ pub(crate) fn pyobject_to_obtype_unlikely(
             return ObType::NumpyScalar;
         } else if is_numpy_array(ob_type) {
             return ObType::NumpyArray;
+        } else if is_class_by_type!(ob_type, PYTORCH_TENSOR_TYPE) {
+            return ObType::PyTorchTensor;
         }
     }
 

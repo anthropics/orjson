@@ -15,6 +15,7 @@ mod list;
 mod none;
 mod numpy;
 mod pyenum;
+mod pytorch;
 mod unicode;
 mod uuid;
 
@@ -30,6 +31,7 @@ pub(crate) use list::{ListTupleSerializer, ZeroListSerializer};
 pub(crate) use none::NoneSerializer;
 pub(crate) use numpy::{NumpyScalar, NumpySerializer, is_numpy_array, is_numpy_scalar};
 pub(crate) use pybool::BoolSerializer;
+pub(crate) use pytorch::PyTorchSerializer;
 pub(crate) use pyenum::EnumSerializer;
 pub(crate) use unicode::{StrSerializer, StrSubclassSerializer};
 pub(crate) use uuid::UUID;

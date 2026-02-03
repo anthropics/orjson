@@ -122,7 +122,20 @@ where
     fn serialize_f32(self, value: f32) -> Result<()> {
         if value.is_infinite() || value.is_nan() {
             cold_path!();
-            self.serialize_unit()
+            #[cfg(yyjson_allow_inf_and_nan)]
+            {
+                if value.is_nan() {
+                    self.serialize_bytes(b"NaN")
+                } else if value.is_sign_positive() {
+                    self.serialize_bytes(b"Infinity")
+                } else {
+                    self.serialize_bytes(b"-Infinity")
+                }
+            }
+            #[cfg(not(yyjson_allow_inf_and_nan))]
+            {
+                self.serialize_unit()
+            }
         } else {
             self.formatter
                 .write_f32(&mut self.writer, value)
@@ -133,7 +146,20 @@ where
     fn serialize_f64(self, value: f64) -> Result<()> {
         if value.is_infinite() || value.is_nan() {
             cold_path!();
-            self.serialize_unit()
+            #[cfg(yyjson_allow_inf_and_nan)]
+            {
+                if value.is_nan() {
+                    self.serialize_bytes(b"NaN")
+                } else if value.is_sign_positive() {
+                    self.serialize_bytes(b"Infinity")
+                } else {
+                    self.serialize_bytes(b"-Infinity")
+                }
+            }
+            #[cfg(not(yyjson_allow_inf_and_nan))]
+            {
+                self.serialize_unit()
+            }
         } else {
             self.formatter
                 .write_f64(&mut self.writer, value)

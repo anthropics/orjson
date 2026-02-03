@@ -20,6 +20,7 @@ pub(crate) enum SerializeError {
     NumpyNotCContiguous,
     NumpyNotNativeEndian,
     NumpyUnsupportedDatatype,
+    PyTorchTensorConversion,
     UnsupportedType(NonNull<crate::ffi::PyObject>),
 }
 
@@ -60,6 +61,9 @@ impl core::fmt::Display for SerializeError {
             }
             SerializeError::NumpyUnsupportedDatatype => {
                 write!(f, "unsupported datatype in numpy array")
+            }
+            SerializeError::PyTorchTensorConversion => {
+                write!(f, "could not convert PyTorch tensor to numpy array")
             }
             SerializeError::UnsupportedType(ptr) => {
                 let name =

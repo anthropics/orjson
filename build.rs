@@ -40,6 +40,8 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(CPython)");
     println!("cargo:rustc-check-cfg=cfg(GraalPy)");
     println!("cargo:rustc-check-cfg=cfg(optimize)");
+    println!("cargo:rustc-check-cfg=cfg(yyjson_allow_inf_and_nan)");
+    println!("cargo:rustc-cfg=yyjson_allow_inf_and_nan");
     println!("cargo:rustc-check-cfg=cfg(Py_3_10)");
     println!("cargo:rustc-check-cfg=cfg(Py_3_11)");
     println!("cargo:rustc-check-cfg=cfg(Py_3_12)");
@@ -70,10 +72,6 @@ fn main() {
     cc::Build::new()
         .file("include/yyjson/yyjson.c")
         .include("include/yyjson")
-        .define("YYJSON_DISABLE_NON_STANDARD", "1")
-        .define("YYJSON_DISABLE_UTF8_VALIDATION", "1")
-        .define("YYJSON_DISABLE_UTILS", "1")
-        .define("YYJSON_DISABLE_WRITER", "1")
         .compile("yyjson")
 }
 

@@ -40,6 +40,7 @@ pub(crate) static mut FIELD_TYPE: *mut PyTypeObject = null_mut();
 pub(crate) static mut FRAGMENT_TYPE: *mut PyTypeObject = null_mut();
 
 pub(crate) static mut ZONEINFO_TYPE: *mut PyTypeObject = null_mut();
+pub(crate) static mut PYTORCH_TENSOR_TYPE: *mut PyTypeObject = null_mut();
 
 pub(crate) static mut UTCOFFSET_METHOD_STR: *mut PyObject = null_mut();
 pub(crate) static mut NORMALIZE_METHOD_STR: *mut PyObject = null_mut();
@@ -174,6 +175,26 @@ fn _init_typerefs_impl() -> bool {
     true
 }
 
+#[cold]
+#[cfg_attr(feature = "optimize", optimize(size))]
+pub(crate) fn look_up_pytorch_type() {
+    unsafe {
+        let torch = PyImport_ImportModule(c"torch".as_ptr());
+        if torch.is_null() {
+            PyErr_Clear();
+            return;
+        }
+        let torch_module_dict = PyObject_GenericGetDict(torch, null_mut());
+        let tensor_type =
+            PyMapping_GetItemString(torch_module_dict, c"Tensor".as_ptr()).cast::<PyTypeObject>();
+        Py_XDECREF(torch_module_dict);
+        Py_XDECREF(torch);
+        if !tensor_type.is_null() {
+            PYTORCH_TENSOR_TYPE = tensor_type;
+        }
+    }
+}
+
 pub(crate) struct NumpyTypes {
     pub array: *mut PyTypeObject,
     pub float64: *mut PyTypeObject,
@@ -232,6 +253,7 @@ pub(crate) fn load_numpy_types() -> Box<Option<NonNull<NumpyTypes>>> {
         });
         Py_XDECREF(numpy_module_dict);
         Py_XDECREF(numpy);
+        look_up_pytorch_type();
         Box::new(Some(nonnull!(Box::<NumpyTypes>::into_raw(types))))
     }
 }

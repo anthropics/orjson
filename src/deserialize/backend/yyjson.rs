@@ -5,6 +5,8 @@ use super::ffi::{
     YYJSON_READ_SUCCESS, yyjson_alc, yyjson_alc_pool_init, yyjson_doc, yyjson_read_err,
     yyjson_read_opts, yyjson_val,
 };
+#[cfg(yyjson_allow_inf_and_nan)]
+use super::ffi::YYJSON_READ_ALLOW_INF_AND_NAN;
 use crate::deserialize::DeserializeError;
 use crate::deserialize::pyobject::get_unicode_key;
 use crate::ffi::{PyBoolRef, PyDictRef, PyFloatRef, PyIntRef, PyListRef, PyNoneRef, PyStrRef};
@@ -94,10 +96,16 @@ pub(crate) fn deserialize(
         pos: 0,
     };
 
+    #[cfg(yyjson_allow_inf_and_nan)]
+    let read_flags = YYJSON_READ_ALLOW_INF_AND_NAN;
+    #[cfg(not(yyjson_allow_inf_and_nan))]
+    let read_flags = 0u32;
+
     let doc = unsafe {
         yyjson_read_opts(
             data.as_ptr().cast::<c_char>().cast_mut(),
             data.len(),
+            read_flags,
             &raw const alloc,
             &raw mut err,
         )
