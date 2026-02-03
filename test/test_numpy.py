@@ -533,11 +533,24 @@ class TestNumpy:
             == array.tolist()
         )
 
+    def test_numpy_array_d0(self):
+        for item in [1, 3.1, False]:
+            print(item)
+            array = numpy.array(item)
+            assert (
+                orjson.loads(
+                    orjson.dumps(
+                        array,
+                        option=orjson.OPT_SERIALIZE_NUMPY,
+                    )
+                )
+                == item
+            )
+
     def test_numpy_array_dimension_zero(self):
         array = numpy.array(0)
         assert array.ndim == 0
-        with pytest.raises(orjson.JSONEncodeError):
-            orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY)
+        assert orjson.loads(orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY)) == 0
 
         array = numpy.empty((0, 4, 2))
         assert (

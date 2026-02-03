@@ -190,6 +190,7 @@ pub(crate) struct NumpyArray {
     capsule: *mut PyCapsule,
     kind: ItemType,
     opts: Opt,
+    is_zero_dimensional: bool,
 }
 
 impl NumpyArray {
@@ -217,10 +218,8 @@ impl NumpyArray {
         } else {
             debug_assert!(unsafe { (*array).nd >= 0 });
             let num_dimensions = unsafe { (*array).nd.cast_unsigned() as usize };
-            if num_dimensions == 0 {
-                ffi!(Py_DECREF(capsule));
-                return Err(PyArrayError::UnsupportedDataType);
-            }
+            let is_zero_dimensional = num_dimensions == 0;
+            let effective_dimensions = if is_zero_dimensional { 1 } else { num_dimensions };
             match ItemType::find(array, ptr) {
                 None => {
                     ffi!(Py_DECREF(capsule));
@@ -229,14 +228,15 @@ impl NumpyArray {
                 Some(kind) => {
                     let mut pyarray = NumpyArray {
                         array: array,
-                        position: vec![0; num_dimensions],
-                        children: Vec::with_capacity(num_dimensions),
+                        position: vec![0; effective_dimensions],
+                        children: Vec::with_capacity(effective_dimensions),
                         depth: 0,
                         capsule: capsule.cast::<PyCapsule>(),
                         kind: kind,
                         opts,
+                        is_zero_dimensional,
                     };
-                    if pyarray.dimensions() > 1 {
+                    if !is_zero_dimensional && pyarray.dimensions() > 1 {
                         pyarray.build();
                     }
                     Ok(pyarray)
@@ -255,6 +255,7 @@ impl NumpyArray {
             capsule: self.capsule,
             kind: self.kind,
             opts: self.opts,
+            is_zero_dimensional: self.is_zero_dimensional,
         };
         arr.build();
         arr
@@ -323,6 +324,54 @@ impl Serialize for NumpyArray {
     where
         S: Serializer,
     {
+        if self.is_zero_dimensional {
+            cold_path!();
+            let data = unsafe { (*self.array).data };
+            return match self.kind {
+                ItemType::F64 => {
+                    DataTypeF64 { obj: unsafe { *(data.cast::<f64>()) } }.serialize(serializer)
+                }
+                ItemType::F32 => {
+                    DataTypeF32 { obj: unsafe { *(data.cast::<f32>()) } }.serialize(serializer)
+                }
+                ItemType::F16 => {
+                    DataTypeF16 { obj: unsafe { *(data.cast::<u16>()) } }.serialize(serializer)
+                }
+                ItemType::U64 => {
+                    DataTypeU64 { obj: unsafe { *(data.cast::<u64>()) } }.serialize(serializer)
+                }
+                ItemType::U32 => {
+                    DataTypeU32 { obj: unsafe { *(data.cast::<u32>()) } }.serialize(serializer)
+                }
+                ItemType::U16 => {
+                    DataTypeU16 { obj: unsafe { *(data.cast::<u16>()) } }.serialize(serializer)
+                }
+                ItemType::U8 => {
+                    DataTypeU8 { obj: unsafe { *(data.cast::<u8>()) } }.serialize(serializer)
+                }
+                ItemType::I64 => {
+                    DataTypeI64 { obj: unsafe { *(data.cast::<i64>()) } }.serialize(serializer)
+                }
+                ItemType::I32 => {
+                    DataTypeI32 { obj: unsafe { *(data.cast::<i32>()) } }.serialize(serializer)
+                }
+                ItemType::I16 => {
+                    DataTypeI16 { obj: unsafe { *(data.cast::<i16>()) } }.serialize(serializer)
+                }
+                ItemType::I8 => {
+                    DataTypeI8 { obj: unsafe { *(data.cast::<i8>()) } }.serialize(serializer)
+                }
+                ItemType::BOOL => {
+                    DataTypeBool { obj: unsafe { *(data.cast::<u8>()) } }.serialize(serializer)
+                }
+                ItemType::DATETIME64(unit) => {
+                    let val = unsafe { *(data.cast::<i64>()) };
+                    let dt = unit.datetime(val, self.opts)
+                        .map_err(NumpyDateTimeError::into_serde_err)?;
+                    dt.serialize(serializer)
+                }
+            };
+        }
         if !(self.depth >= self.dimensions() || self.shape()[self.depth] != 0) {
             cold_path!();
             ZeroListSerializer::new().serialize(serializer)

@@ -10,3 +10,4 @@
 /target
 /vendor
 __pycache__
+.claude/
