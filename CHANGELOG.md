@@ -1,6 +1,28 @@
 # Changelog
 
 
+## 3.11.7-post1 (Anthropic fork)
+
+### Added
+
+- NaN/Infinity serialization and deserialization support (non-standard JSON
+  extension). `float('nan')` serializes to `NaN`, `float('inf')` to `Infinity`,
+  `float('-inf')` to `-Infinity`. Parsing accepts these literals.
+- PyTorch tensor serialization via `OPT_SERIALIZE_NUMPY`. Tensors are converted
+  to numpy arrays (detach -> cpu -> numpy) before serialization.
+- Zero-dimensional numpy array support. 0-d arrays are serialized as scalar
+  values instead of raising an error.
+- Duck-typing based PyTorch tensor detection using module name check, avoiding
+  runtime torch import overhead.
+- MagicMock handling fix: check `__module__` before `HasAttr` to avoid false
+  positives from MagicMock objects.
+
+### Changed
+
+- Removed yyjson recursion depth limit (YYJSON_DISABLE_NON_STANDARD removed).
+- Large overflow numbers now parse as Infinity instead of raising errors.
+
+
 ## 3.11.7 - 2026-02-02
 
 ### Changed
