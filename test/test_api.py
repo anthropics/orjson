@@ -127,7 +127,7 @@ class TestApi:
         """
         __version__
         """
-        assert re.match(r"^\d+\.\d+(\.\d+)?$", orjson.__version__)
+        assert re.match(r"^\d+\.\d+\.\d+(-\w+)?$", orjson.__version__)
 
     def test_valueerror(self):
         """
