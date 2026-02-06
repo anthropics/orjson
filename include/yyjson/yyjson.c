@@ -329,9 +329,7 @@ uint32_t yyjson_version(void) {
 #ifndef YYJSON_DISABLE_UTF8_VALIDATION
 #define YYJSON_DISABLE_UTF8_VALIDATION 0
 #endif
-#ifndef YYJSON_READER_CONTAINER_RECURSION_LIMIT
-#define YYJSON_READER_CONTAINER_RECURSION_LIMIT 1024
-#endif
+/* Anthropic: removed YYJSON_READER_CONTAINER_RECURSION_LIMIT */
 
 /*==============================================================================
  * Macros
@@ -3846,6 +3844,14 @@ static_inline bool read_nan(bool sign, u8 **ptr, u8 **pre, yyjson_val *val) {
     return false;
 }
 
+/* Anthropic: read_inf_or_nan helper for NaN/Infinity support */
+static_inline bool read_inf_or_nan(bool sign, u8 **ptr, u8 **pre,
+                                    yyjson_val *val) {
+    if (read_inf(sign, ptr, pre, val)) return true;
+    if (read_nan(sign, ptr, pre, val)) return true;
+    return false;
+}
+
 /** Read a JSON number as raw string. */
 static_noinline bool read_number_raw(u8 **ptr,
                                      u8 **pre,
@@ -3998,7 +4004,7 @@ static_noinline bool is_truncated_end(u8 *hdr, u8 *cur, u8 *end,
     if (code == YYJSON_READ_ERROR_UNEXPECTED_CHARACTER ||
         code == YYJSON_READ_ERROR_INVALID_NUMBER ||
         code == YYJSON_READ_ERROR_LITERAL) {
-        if (false) {
+        if (true) { /* Anthropic: enable inf/nan truncation check */
             if (*cur == '-') cur++;
             if (is_truncated_str(cur, end, "infinity", false) ||
                 is_truncated_str(cur, end, "nan", false)) {
@@ -4007,7 +4013,7 @@ static_noinline bool is_truncated_end(u8 *hdr, u8 *cur, u8 *end,
         }
     }
     if (code == YYJSON_READ_ERROR_UNEXPECTED_CONTENT) {
-        if (false) {
+        if (true) { /* Anthropic: enable inf/nan truncation check */
             if (hdr + 3 <= cur &&
                 is_truncated_str(cur - 3, end, "infinity", false)) {
                 return true; /* e.g. infin would be read as inf + in */
@@ -4390,7 +4396,7 @@ static_inline bool read_number(u8 **ptr,
 } while (false)
     
 #define return_inf() do { \
-    if (false) return_f64_bin(F64_RAW_INF); \
+    if (true) return_f64_bin(F64_RAW_INF); /* Anthropic: allow inf */ \
     else return_err(hdr, "number is infinity when parsed as double"); \
 } while (false)
     
@@ -4418,6 +4424,11 @@ static_inline bool read_number(u8 **ptr,
     /* begin with a leading zero or non-digit */
     if (unlikely(!digi_is_nonzero(*cur))) { /* 0 or non-digit char */
         if (unlikely(*cur != '0')) { /* non-digit char */
+            /* Anthropic: try inf/nan after minus sign */
+            if (read_inf_or_nan(sign, &cur, 0, val)) {
+                *end = cur;
+                return true;
+            }
             return_err(cur, "no digit after minus sign");
         }
         /* begin with 0 */
@@ -4976,7 +4987,7 @@ static_inline bool read_number(u8 **ptr,
 } while (false)
     
 #define return_inf() do { \
-    if (false) return_f64_bin(F64_RAW_INF); \
+    if (true) return_f64_bin(F64_RAW_INF); /* Anthropic: allow inf */ \
     else return_err(hdr, "number is infinity when parsed as double"); \
 } while (false)
     
@@ -4996,9 +5007,14 @@ static_inline bool read_number(u8 **ptr,
     sign = (*hdr == '-');
     cur += sign;
     sig = (u8)(*cur - '0');
-    
+
     /* read first digit, check leading zero */
     if (unlikely(!digi_is_digit(*cur))) {
+        /* Anthropic: try inf/nan after minus sign */
+        if (read_inf_or_nan(sign, &cur, 0, val)) {
+            *end = cur;
+            return true;
+        }
         return_err(cur, "no digit after minus sign");
     }
     if (*cur == '0') {
@@ -5672,10 +5688,13 @@ static_noinline yyjson_doc *read_root_single(u8 *hdr,
     }
     if (*cur == 'n') {
         if (likely(read_null(&cur, val))) goto doc_end;
-        if (false) {
-            if (read_nan(false, &cur, 0, val)) goto doc_end;
-        }
+        /* Anthropic: try NaN */
+        if (read_nan(false, &cur, 0, val)) goto doc_end;
         goto fail_literal;
+    }
+    /* Anthropic: try Infinity/NaN at top level */
+    if (*cur == 'I' || *cur == 'N') {
+        if (read_inf_or_nan(false, &cur, 0, val)) goto doc_end;
     }
     goto fail_character;
     
@@ -5714,9 +5733,8 @@ fail_character:
     return_err(cur, UNEXPECTED_CHARACTER, "unexpected character");
 fail_garbage:
     return_err(cur, UNEXPECTED_CONTENT, "unexpected content after document");
-fail_recursion:
-    return_err(cur, RECURSION_DEPTH, "array and object recursion depth exceeded");
-    
+    /* Anthropic: removed fail_recursion label */
+
 #undef return_err
 }
 
@@ -5772,10 +5790,10 @@ static_inline yyjson_doc *read_root_minify(u8 *hdr,
     yyjson_doc *doc; /* the JSON document, equals to val_hdr */
     const char *msg; /* error message */
 
-    u32 container_depth = 0; /* limit on number of open array and map */
+    /* Anthropic: removed container_depth */
     bool raw; /* read number as raw */
     bool inv; /* allow invalid unicode */
-    
+
     dat_len = has_read_flag(STOP_WHEN_DONE) ? 256 : (usize)(end - cur);
     hdr_len = sizeof(yyjson_doc) / sizeof(yyjson_val);
     hdr_len += (sizeof(yyjson_doc) % sizeof(yyjson_val)) > 0;
@@ -5801,24 +5819,21 @@ static_inline yyjson_doc *read_root_minify(u8 *hdr,
     }
     
 arr_begin:
-    container_depth++;
-    if (unlikely(container_depth >= YYJSON_READER_CONTAINER_RECURSION_LIMIT)) {
-        goto fail_recursion;
-    }
+    /* Anthropic: removed container_depth++ and recursion limit check */
 
     /* save current container */
     ctn->tag = (((u64)ctn_len + 1) << YYJSON_TAG_BIT) |
                (ctn->tag & YYJSON_TAG_MASK);
-    
+
     /* create a new array value, save parent container offset */
     val_incr();
     val->tag = YYJSON_TYPE_ARR;
     val->uni.ofs = (usize)((u8 *)val - (u8 *)ctn);
-    
+
     /* push the new array value as current container */
     ctn = val;
     ctn_len = 0;
-    
+
 arr_val_begin:
     if (*cur == '{') {
         cur++;
@@ -5856,7 +5871,16 @@ arr_val_begin:
         val_incr();
         ctn_len++;
         if (likely(read_null(&cur, val))) goto arr_val_end;
+        /* Anthropic: try NaN */
+        if (read_nan(false, &cur, 0, val)) goto arr_val_end;
         goto fail_literal;
+    }
+    /* Anthropic: try Infinity/NaN in array */
+    if (*cur == 'I' || *cur == 'N') {
+        val_incr();
+        ctn_len++;
+        if (read_inf_or_nan(false, &cur, 0, val)) goto arr_val_end;
+        goto fail_character;
     }
     if (*cur == ']') {
         cur++;
@@ -5869,7 +5893,7 @@ arr_val_begin:
         goto arr_val_begin;
     }
     goto fail_character;
-    
+
 arr_val_end:
     if (*cur == ',') {
         cur++;
@@ -5888,18 +5912,18 @@ arr_val_end:
         if (byte_match_2(cur, "/*")) goto fail_comment;
     }
     goto fail_character;
-    
+
 arr_end:
-    container_depth--;
+    /* Anthropic: removed container_depth-- */
 
     /* get parent container */
     ctn_parent = (yyjson_val *)(void *)((u8 *)ctn - ctn->uni.ofs);
-    
+
     /* save the next sibling value offset */
     ctn->uni.ofs = (usize)((u8 *)val - (u8 *)ctn) + sizeof(yyjson_val);
     ctn->tag = ((ctn_len) << YYJSON_TAG_BIT) | YYJSON_TYPE_ARR;
     if (unlikely(ctn == ctn_parent)) goto doc_end;
-    
+
     /* pop parent as current container */
     ctn = ctn_parent;
     ctn_len = (usize)(ctn->tag >> YYJSON_TAG_BIT);
@@ -5908,12 +5932,9 @@ arr_end:
     } else {
         goto arr_val_end;
     }
-    
+
 obj_begin:
-    container_depth++;
-    if (unlikely(container_depth >= YYJSON_READER_CONTAINER_RECURSION_LIMIT)) {
-        goto fail_recursion;
-    }
+    /* Anthropic: removed container_depth++ and recursion limit check */
 
     /* push container */
     ctn->tag = (((u64)ctn_len + 1) << YYJSON_TAG_BIT) |
@@ -6000,14 +6021,23 @@ obj_val_begin:
         val++;
         ctn_len++;
         if (likely(read_null(&cur, val))) goto obj_val_end;
+        /* Anthropic: try NaN */
+        if (read_nan(false, &cur, 0, val)) goto obj_val_end;
         goto fail_literal;
+    }
+    /* Anthropic: try Infinity/NaN in object value */
+    if (*cur == 'I' || *cur == 'N') {
+        val++;
+        ctn_len++;
+        if (read_inf_or_nan(false, &cur, 0, val)) goto obj_val_end;
+        goto fail_character;
     }
     if (char_is_space(*cur)) {
         while (char_is_space(*++cur));
         goto obj_val_begin;
     }
     goto fail_character;
-    
+
 obj_val_end:
     if (likely(*cur == ',')) {
         cur++;
@@ -6026,9 +6056,9 @@ obj_val_end:
         if (byte_match_2(cur, "/*")) goto fail_comment;
     }
     goto fail_character;
-    
+
 obj_end:
-    container_depth--;
+    /* Anthropic: removed container_depth-- */
 
     /* pop container */
     ctn_parent = (yyjson_val *)(void *)((u8 *)ctn - ctn->uni.ofs);
@@ -6043,7 +6073,7 @@ obj_end:
     } else {
         goto arr_val_end;
     }
-    
+
 doc_end:
     /* check invalid contents after json document */
     if (unlikely(cur < end) && !has_read_flag(STOP_WHEN_DONE)) {
@@ -6055,7 +6085,7 @@ doc_end:
         }
         if (unlikely(cur < end)) goto fail_garbage;
     }
-    
+
     doc = (yyjson_doc *)val_hdr;
     doc->root = val_hdr + hdr_len;
     doc->alc = alc;
@@ -6063,7 +6093,7 @@ doc_end:
     doc->val_read = (usize)((val - doc->root) + 1);
     doc->str_pool = has_read_flag(INSITU) ? NULL : (char *)hdr;
     return doc;
-    
+
 fail_string:
     return_err(cur, INVALID_STRING, msg);
 fail_number:
@@ -6080,9 +6110,8 @@ fail_character:
     return_err(cur, UNEXPECTED_CHARACTER, "unexpected character");
 fail_garbage:
     return_err(cur, UNEXPECTED_CONTENT, "unexpected content after document");
-fail_recursion:
-    return_err(cur, RECURSION_DEPTH, "array and object recursion depth exceeded");
-    
+    /* Anthropic: removed fail_recursion label */
+
 #undef val_incr
 #undef return_err
 }
@@ -6139,8 +6168,8 @@ static_inline yyjson_doc *read_root_pretty(u8 *hdr,
     yyjson_doc *doc; /* the JSON document, equals to val_hdr */
     const char *msg; /* error message */
 
-    u32 container_depth = 0; /* limit on number of open array and map */
-    
+    /* Anthropic: removed container_depth */
+
     dat_len = has_read_flag(STOP_WHEN_DONE) ? 256 : (usize)(end - cur);
     hdr_len = sizeof(yyjson_doc) / sizeof(yyjson_val);
     hdr_len += (sizeof(yyjson_doc) % sizeof(yyjson_val)) > 0;
@@ -6168,20 +6197,17 @@ static_inline yyjson_doc *read_root_pretty(u8 *hdr,
     }
     
 arr_begin:
-    container_depth++;
-    if (unlikely(container_depth >= YYJSON_READER_CONTAINER_RECURSION_LIMIT)) {
-        goto fail_recursion;
-    }
+    /* Anthropic: removed container_depth++ and recursion limit check */
 
     /* save current container */
     ctn->tag = (((u64)ctn_len + 1) << YYJSON_TAG_BIT) |
                (ctn->tag & YYJSON_TAG_MASK);
-    
+
     /* create a new array value, save parent container offset */
     val_incr();
     val->tag = YYJSON_TYPE_ARR;
     val->uni.ofs = (usize)((u8 *)val - (u8 *)ctn);
-    
+
     /* push the new array value as current container */
     ctn = val;
     ctn_len = 0;
@@ -6236,10 +6262,16 @@ arr_val_begin:
         val_incr();
         ctn_len++;
         if (likely(read_null(&cur, val))) goto arr_val_end;
-        if (false) {
-            if (read_nan(false, &cur, 0, val)) goto arr_val_end;
-        }
+        /* Anthropic: try NaN */
+        if (read_nan(false, &cur, 0, val)) goto arr_val_end;
         goto fail_literal;
+    }
+    /* Anthropic: try Infinity/NaN in array */
+    if (*cur == 'I' || *cur == 'N') {
+        val_incr();
+        ctn_len++;
+        if (read_inf_or_nan(false, &cur, 0, val)) goto arr_val_end;
+        goto fail_character;
     }
     if (*cur == ']') {
         cur++;
@@ -6252,7 +6284,7 @@ arr_val_begin:
         goto arr_val_begin;
     }
     goto fail_character;
-    
+
 arr_val_end:
     if (byte_match_2(cur, ",\n")) {
         cur += 2;
@@ -6277,16 +6309,16 @@ arr_val_end:
     goto fail_character;
     
 arr_end:
-    container_depth--;
+    /* Anthropic: removed container_depth-- */
 
     /* get parent container */
     ctn_parent = (yyjson_val *)(void *)((u8 *)ctn - ctn->uni.ofs);
-    
+
     /* save the next sibling value offset */
     ctn->uni.ofs = (usize)((u8 *)val - (u8 *)ctn) + sizeof(yyjson_val);
     ctn->tag = ((ctn_len) << YYJSON_TAG_BIT) | YYJSON_TYPE_ARR;
     if (unlikely(ctn == ctn_parent)) goto doc_end;
-    
+
     /* pop parent as current container */
     ctn = ctn_parent;
     ctn_len = (usize)(ctn->tag >> YYJSON_TAG_BIT);
@@ -6296,12 +6328,9 @@ arr_end:
     } else {
         goto arr_val_end;
     }
-    
+
 obj_begin:
-    container_depth++;
-    if (unlikely(container_depth >= YYJSON_READER_CONTAINER_RECURSION_LIMIT)) {
-        goto fail_recursion;
-    }
+    /* Anthropic: removed container_depth++ and recursion limit check */
 
     /* push container */
     ctn->tag = (((u64)ctn_len + 1) << YYJSON_TAG_BIT) |
@@ -6400,14 +6429,23 @@ obj_val_begin:
         val++;
         ctn_len++;
         if (likely(read_null(&cur, val))) goto obj_val_end;
+        /* Anthropic: try NaN */
+        if (read_nan(false, &cur, 0, val)) goto obj_val_end;
         goto fail_literal;
+    }
+    /* Anthropic: try Infinity/NaN in object value */
+    if (*cur == 'I' || *cur == 'N') {
+        val++;
+        ctn_len++;
+        if (read_inf_or_nan(false, &cur, 0, val)) goto obj_val_end;
+        goto fail_character;
     }
     if (char_is_space(*cur)) {
         while (char_is_space(*++cur));
         goto obj_val_begin;
     }
     goto fail_character;
-    
+
 obj_val_end:
     if (byte_match_2(cur, ",\n")) {
         cur += 2;
@@ -6426,9 +6464,9 @@ obj_val_end:
         goto obj_val_end;
     }
     goto fail_character;
-    
+
 obj_end:
-    container_depth--;
+    /* Anthropic: removed container_depth-- */
 
     /* pop container */
     ctn_parent = (yyjson_val *)(void *)((u8 *)ctn - ctn->uni.ofs);
@@ -6481,9 +6519,8 @@ fail_character:
     return_err(cur, UNEXPECTED_CHARACTER, "unexpected character");
 fail_garbage:
     return_err(cur, UNEXPECTED_CONTENT, "unexpected content after document");
-fail_recursion:
-    return_err(cur, RECURSION_DEPTH, "array and object recursion depth exceeded");
-    
+    /* Anthropic: removed fail_recursion label */
+
 #undef val_incr
 #undef return_err
 }
