@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import MagicMock
 
 import orjson
 import pytest
@@ -123,3 +124,67 @@ class PyTorchTests(unittest.TestCase):
             orjson.dumps(data, option=orjson.OPT_SERIALIZE_NUMPY),
             b'{"nan":NaN,"inf":Infinity,"neg_inf":-Infinity,"mixed":[1.0,NaN,Infinity,-Infinity]}'
         )
+
+    def test_tensor_in_list(self):
+        """PyTorch tensor as element in a Python list"""
+        assert orjson.dumps([torch.tensor([1, 2])], option=orjson.OPT_SERIALIZE_NUMPY) == b'[[1,2]]'
+
+    def test_tensor_3d(self):
+        """3D tensor"""
+        tensor = torch.zeros(2, 3, 4)
+        result = orjson.loads(orjson.dumps(tensor, option=orjson.OPT_SERIALIZE_NUMPY))
+        assert len(result) == 2 and len(result[0]) == 3 and len(result[0][0]) == 4
+
+    def test_tensor_dtypes(self):
+        """Various tensor dtypes"""
+        for dtype in [torch.float16, torch.float64, torch.int8, torch.int16, torch.int32]:
+            tensor = torch.tensor([1, 2, 3], dtype=dtype)
+            result = orjson.loads(orjson.dumps(tensor, option=orjson.OPT_SERIALIZE_NUMPY))
+            for i, v in enumerate(result):
+                assert abs(v - [1, 2, 3][i]) < 0.01
+
+    def test_non_torch_duck_type(self):
+        """Object with numpy/cpu/detach but __module__ not 'torch' is not treated as tensor"""
+        class FakeTensor:
+            def numpy(self): return [1, 2]
+            def cpu(self): return self
+            def detach(self): return self
+        with self.assertRaises(orjson.JSONEncodeError):
+            orjson.dumps(FakeTensor(), option=orjson.OPT_SERIALIZE_NUMPY)
+
+    def test_magicmock_not_tensor(self):
+        """MagicMock not detected as PyTorch tensor (post4 fix)"""
+        with self.assertRaises(orjson.JSONEncodeError):
+            orjson.dumps(MagicMock(), option=orjson.OPT_SERIALIZE_NUMPY)
+
+    def test_tensor_pretty(self):
+        """PyTorch tensor with OPT_INDENT_2"""
+        tensor = torch.tensor([[1, 2], [3, 4]])
+        result = orjson.dumps(tensor, option=orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_INDENT_2)
+        assert result == b'[\n  [\n    1,\n    2\n  ],\n  [\n    3,\n    4\n  ]\n]'
+
+    def test_tensor_conversion_failure(self):
+        """Sparse tensor fails numpy conversion - PyTorchTensorConversion error"""
+        t = torch.sparse_coo_tensor(torch.tensor([[0, 1]]), torch.tensor([1.0, 2.0]), (3,))
+        with self.assertRaises(orjson.JSONEncodeError) as cm:
+            orjson.dumps(t, option=orjson.OPT_SERIALIZE_NUMPY)
+        assert "failed to convert PyTorch tensor to numpy array" in str(cm.exception)
+
+    def test_tensor_conversion_failure_with_default(self):
+        """Sparse tensor with default callback falls back to default"""
+        t = torch.sparse_coo_tensor(torch.tensor([[0, 1]]), torch.tensor([1.0, 2.0]), (3,))
+        result = orjson.dumps(t, option=orjson.OPT_SERIALIZE_NUMPY, default=lambda x: "fallback")
+        assert result == b'"fallback"'
+
+    def test_tensor_unsupported_numpy_dtype(self):
+        """Complex tensor: numpy() succeeds but numpy dtype is unsupported"""
+        tensor = torch.tensor([1+2j, 3+4j])
+        with self.assertRaises(orjson.JSONEncodeError) as cm:
+            orjson.dumps(tensor, option=orjson.OPT_SERIALIZE_NUMPY)
+        assert "unsupported datatype in numpy array" in str(cm.exception)
+
+    def test_tensor_unsupported_numpy_dtype_with_default(self):
+        """Complex tensor with default: falls back to default via numpy unsupported path"""
+        tensor = torch.tensor([1+2j, 3+4j])
+        result = orjson.dumps(tensor, option=orjson.OPT_SERIALIZE_NUMPY, default=lambda x: str(x))
+        assert len(result) > 0

@@ -548,6 +548,46 @@ class TestType:
         assert orjson.dumps(obj) == ref.encode("utf-8")
         assert orjson.loads(ref) == list(obj)
 
+    def test_nan_inf_in_list(self):
+        """NaN/Infinity in a list"""
+        assert orjson.dumps([1.0, float("nan"), float("inf"), float("-inf")]) == b'[1.0,NaN,Infinity,-Infinity]'
+
+    def test_nan_inf_in_dict_value(self):
+        """NaN/Infinity as dict values"""
+        assert orjson.dumps({"a": float("nan")}) == b'{"a":NaN}'
+        assert orjson.dumps({"b": float("inf")}) == b'{"b":Infinity}'
+        assert orjson.dumps({"c": float("-inf")}) == b'{"c":-Infinity}'
+
+    def test_nan_inf_pretty(self):
+        """NaN/Infinity with OPT_INDENT_2"""
+        assert orjson.dumps({"val": float("nan"), "inf": float("inf")}, option=orjson.OPT_INDENT_2) == b'{\n  "val": NaN,\n  "inf": Infinity\n}'
+
+    def test_nan_inf_roundtrip(self):
+        """NaN/Infinity roundtrip through dumps/loads"""
+        assert math.isnan(orjson.loads(orjson.dumps(float("nan"))))
+        assert orjson.loads(orjson.dumps(float("inf"))) == float("inf")
+        assert orjson.loads(orjson.dumps(float("-inf"))) == float("-inf")
+
+    def test_nan_loads_top_level(self):
+        """NaN/Infinity as top-level JSON values"""
+        assert math.isnan(orjson.loads("NaN"))
+        assert orjson.loads("Infinity") == float("inf")
+        assert orjson.loads("-Infinity") == float("-inf")
+
+    def test_nan_loads_in_object(self):
+        """NaN/Infinity inside JSON objects"""
+        result = orjson.loads('{"a":NaN,"b":Infinity,"c":-Infinity}')
+        assert math.isnan(result["a"])
+        assert result["b"] == float("inf")
+        assert result["c"] == float("-inf")
+
+    def test_nan_loads_bytes(self):
+        """NaN/Infinity from bytes, bytearray, memoryview"""
+        for val in [b"[NaN]", bytearray(b"[NaN]"), memoryview(b"[NaN]")]:
+            assert math.isnan(orjson.loads(val)[0])
+        for val in [b"[Infinity]", bytearray(b"[Infinity]"), memoryview(b"[Infinity]")]:
+            assert orjson.loads(val)[0] == float("inf")
+
     def test_object(self):
         """
         object() dumps()
