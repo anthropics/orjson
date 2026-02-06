@@ -120,24 +120,70 @@ where
 
     #[inline]
     fn serialize_f32(self, value: f32) -> Result<()> {
-        if value.is_infinite() || value.is_nan() {
-            cold_path!();
-            self.serialize_unit()
-        } else {
+        #[cfg(yyjson_allow_inf_and_nan)]
+        {
+            if value.is_infinite() {
+                if value.is_sign_positive() {
+                    self.writer.reserve(8);
+                    unsafe { self.writer.put_slice(b"Infinity") };
+                } else {
+                    self.writer.reserve(9);
+                    unsafe { self.writer.put_slice(b"-Infinity") };
+                }
+                return Ok(());
+            } else if value.is_nan() {
+                self.writer.reserve(3);
+                unsafe { self.writer.put_slice(b"NaN") };
+                return Ok(());
+            }
             self.formatter
                 .write_f32(&mut self.writer, value)
                 .map_err(Error::io)
         }
+        #[cfg(not(yyjson_allow_inf_and_nan))]
+        {
+            if value.is_infinite() || value.is_nan() {
+                cold_path!();
+                self.serialize_unit()
+            } else {
+                self.formatter
+                    .write_f32(&mut self.writer, value)
+                    .map_err(Error::io)
+            }
+        }
     }
     #[inline]
     fn serialize_f64(self, value: f64) -> Result<()> {
-        if value.is_infinite() || value.is_nan() {
-            cold_path!();
-            self.serialize_unit()
-        } else {
+        #[cfg(yyjson_allow_inf_and_nan)]
+        {
+            if value.is_infinite() {
+                if value.is_sign_positive() {
+                    self.writer.reserve(8);
+                    unsafe { self.writer.put_slice(b"Infinity") };
+                } else {
+                    self.writer.reserve(9);
+                    unsafe { self.writer.put_slice(b"-Infinity") };
+                }
+                return Ok(());
+            } else if value.is_nan() {
+                self.writer.reserve(3);
+                unsafe { self.writer.put_slice(b"NaN") };
+                return Ok(());
+            }
             self.formatter
                 .write_f64(&mut self.writer, value)
                 .map_err(Error::io)
+        }
+        #[cfg(not(yyjson_allow_inf_and_nan))]
+        {
+            if value.is_infinite() || value.is_nan() {
+                cold_path!();
+                self.serialize_unit()
+            } else {
+                self.formatter
+                    .write_f64(&mut self.writer, value)
+                    .map_err(Error::io)
+            }
         }
     }
 

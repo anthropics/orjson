@@ -55,6 +55,17 @@ where
 {
     if val.is_infinite() || val.is_nan() {
         cold_path!();
+        #[cfg(yyjson_allow_inf_and_nan)]
+        {
+            if val.is_nan() {
+                buf.put_slice(b"NaN");
+            } else if val.is_sign_positive() {
+                buf.put_slice(b"Infinity");
+            } else {
+                buf.put_slice(b"-Infinity");
+            }
+        }
+        #[cfg(not(yyjson_allow_inf_and_nan))]
         buf.put_slice(b"null");
     } else {
         write_finite_float(buf, val)
@@ -68,6 +79,17 @@ where
 {
     if val.is_infinite() || val.is_nan() {
         cold_path!();
+        #[cfg(yyjson_allow_inf_and_nan)]
+        {
+            if val.is_nan() {
+                buf.put_slice(b"NaN");
+            } else if val.is_sign_positive() {
+                buf.put_slice(b"Infinity");
+            } else {
+                buf.put_slice(b"-Infinity");
+            }
+        }
+        #[cfg(not(yyjson_allow_inf_and_nan))]
         buf.put_slice(b"null");
     } else {
         write_finite_float(buf, val)
