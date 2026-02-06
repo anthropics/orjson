@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 3.11.7-post2
+
+### Added
+
+- Support serializing NaN and Infinity as literals instead of null.
+- Remove JSON parsing recursion limit.
+- Support serializing PyTorch tensors when numpy serialization is enabled.
+- Support serializing zero-dimensional numpy arrays as scalars.
+
 ## 3.11.7 - 2026-02-02
 
 ### Changed
