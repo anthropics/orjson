@@ -190,6 +190,7 @@ pub(crate) struct NumpyArray {
     capsule: *mut PyCapsule,
     kind: ItemType,
     opts: Opt,
+    is_zero_dimensional: bool,
 }
 
 impl NumpyArray {
@@ -217,10 +218,8 @@ impl NumpyArray {
         } else {
             debug_assert!(unsafe { (*array).nd >= 0 });
             let num_dimensions = unsafe { (*array).nd.cast_unsigned() as usize };
-            if num_dimensions == 0 {
-                ffi!(Py_DECREF(capsule));
-                return Err(PyArrayError::UnsupportedDataType);
-            }
+            let is_zero_dimensional = num_dimensions == 0;
+            let effective_dimensions = if is_zero_dimensional { 1 } else { num_dimensions };
             match ItemType::find(array, ptr) {
                 None => {
                     ffi!(Py_DECREF(capsule));
@@ -229,14 +228,15 @@ impl NumpyArray {
                 Some(kind) => {
                     let mut pyarray = NumpyArray {
                         array: array,
-                        position: vec![0; num_dimensions],
-                        children: Vec::with_capacity(num_dimensions),
+                        position: vec![0; effective_dimensions],
+                        children: Vec::with_capacity(effective_dimensions),
                         depth: 0,
                         capsule: capsule.cast::<PyCapsule>(),
                         kind: kind,
                         opts,
+                        is_zero_dimensional,
                     };
-                    if pyarray.dimensions() > 1 {
+                    if !is_zero_dimensional && pyarray.dimensions() > 1 {
                         pyarray.build();
                     }
                     Ok(pyarray)
@@ -255,6 +255,7 @@ impl NumpyArray {
             capsule: self.capsule,
             kind: self.kind,
             opts: self.opts,
+            is_zero_dimensional: false,
         };
         arr.build();
         arr
@@ -323,7 +324,68 @@ impl Serialize for NumpyArray {
     where
         S: Serializer,
     {
-        if !(self.depth >= self.dimensions() || self.shape()[self.depth] != 0) {
+        // Anthropic: handle zero-dimensional numpy arrays
+        if self.is_zero_dimensional {
+            let data = unsafe { (*self.array).data };
+            match self.kind {
+                ItemType::F64 => {
+                    let val = unsafe { *(data.cast::<f64>()) };
+                    return serializer.serialize_f64(val);
+                }
+                ItemType::F32 => {
+                    let val = unsafe { *(data.cast::<f32>()) };
+                    return serializer.serialize_f32(val);
+                }
+                ItemType::F16 => {
+                    let val = unsafe { *(data.cast::<u16>()) };
+                    let as_f16 = half::f16::from_bits(val);
+                    return serializer.serialize_f32(as_f16.to_f32());
+                }
+                ItemType::I64 => {
+                    let val = unsafe { *(data.cast::<i64>()) };
+                    return serializer.serialize_i64(val);
+                }
+                ItemType::I32 => {
+                    let val = unsafe { *(data.cast::<i32>()) };
+                    return serializer.serialize_i32(val);
+                }
+                ItemType::I16 => {
+                    let val = unsafe { *(data.cast::<i16>()) };
+                    return serializer.serialize_i32(i32::from(val));
+                }
+                ItemType::I8 => {
+                    let val = unsafe { *(data.cast::<i8>()) };
+                    return serializer.serialize_i32(i32::from(val));
+                }
+                ItemType::U64 => {
+                    let val = unsafe { *(data.cast::<u64>()) };
+                    return serializer.serialize_u64(val);
+                }
+                ItemType::U32 => {
+                    let val = unsafe { *(data.cast::<u32>()) };
+                    return serializer.serialize_u32(val);
+                }
+                ItemType::U16 => {
+                    let val = unsafe { *(data.cast::<u16>()) };
+                    return serializer.serialize_u32(u32::from(val));
+                }
+                ItemType::U8 => {
+                    let val = unsafe { *(data.cast::<u8>()) };
+                    return serializer.serialize_u32(u32::from(val));
+                }
+                ItemType::BOOL => {
+                    let val = unsafe { *(data.cast::<u8>()) };
+                    return serializer.serialize_bool(val == 1);
+                }
+                ItemType::DATETIME64(unit) => {
+                    let val = unsafe { *(data.cast::<i64>()) };
+                    let dt = unit
+                        .datetime(val, self.opts)
+                        .map_err(NumpyDateTimeError::into_serde_err)?;
+                    return dt.serialize(serializer);
+                }
+            }
+        } else if !(self.depth >= self.dimensions() || self.shape()[self.depth] != 0) {
             cold_path!();
             ZeroListSerializer::new().serialize(serializer)
         } else if !self.children.is_empty() {
