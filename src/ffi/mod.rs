@@ -74,9 +74,11 @@ pub(crate) use pyo3_ffi::{
     PyMemoryView_Type, PyMethodDef, PyMethodDefPointer, PyModule_AddIntConstant,
     PyModule_AddObject, PyModuleDef, PyModuleDef_HEAD_INIT, PyModuleDef_Init, PyModuleDef_Slot,
     PyObject, PyObject_CallFunctionObjArgs, PyObject_CallMethodObjArgs, PyObject_GenericGetDict,
-    PyObject_GetAttr, PyObject_HasAttr, PyObject_Hash, PyObject_Vectorcall, PyTuple_New,
+    PyObject_GetAttr, PyObject_GetAttrString, PyObject_HasAttr, PyObject_HasAttrString,
+    PyObject_Hash, PyObject_Vectorcall, PyTuple_New,
     PyTuple_Type, PyTupleObject, PyType_Ready, PyType_Type, PyTypeObject, PyUnicode_AsUTF8AndSize,
-    PyUnicode_FromStringAndSize, PyUnicode_InternFromString, PyUnicode_New, PyUnicode_Type,
+    PyUnicode_AsUTF8, PyUnicode_FromStringAndSize, PyUnicode_InternFromString, PyUnicode_New,
+    PyUnicode_Type,
     PyVarObject, PyVectorcall_NARGS,
 };
 

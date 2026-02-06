@@ -13,8 +13,8 @@ use crate::serialize::per_type::datetimelike::DateTimeLike;
 use crate::serialize::per_type::{
     BoolSerializer, DataclassGenericSerializer, Date, DateTime, DefaultSerializer, EnumSerializer,
     FloatSerializer, FragmentSerializer, IntSerializer, ListTupleSerializer, NoneSerializer,
-    NumpyScalar, NumpySerializer, StrSerializer, StrSubclassSerializer, Time, UUID,
-    ZeroListSerializer,
+    NumpyScalar, NumpySerializer, PyTorchSerializer, StrSerializer, StrSubclassSerializer, Time,
+    UUID, ZeroListSerializer,
 };
 use crate::serialize::serializer::PyObjectSerializer;
 use crate::serialize::state::SerializerState;
@@ -218,6 +218,14 @@ macro_rules! impl_serialize_entry {
                 $map.serialize_value(&FragmentSerializer::new(unsafe {
                     PyFragmentRef::from_ptr_unchecked($value)
                 }))?;
+            }
+            ObType::PyTorchTensor => {
+                $map.serialize_key($key).unwrap();
+                $map.serialize_value(&PyTorchSerializer::new(&PyObjectSerializer::new(
+                    $value,
+                    $self.state,
+                    $self.default,
+                )))?;
             }
             ObType::Unknown => {
                 $map.serialize_key($key).unwrap();
@@ -502,6 +510,7 @@ impl DictNonStrKey {
                 | ObType::List
                 | ObType::Dataclass
                 | ObType::Fragment
+                | ObType::PyTorchTensor
                 | ObType::Unknown => Err(SerializeError::DictKeyInvalidType),
             }
         }
