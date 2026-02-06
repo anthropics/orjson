@@ -30,6 +30,7 @@ pub(crate) enum ObType {
     Enum,
     StrSubclass,
     Fragment,
+    PyTorchTensor,
     Unknown,
 }
 
@@ -53,6 +54,47 @@ pub(crate) fn pyobject_to_obtype(obj: *mut crate::ffi::PyObject, opts: Opt) -> O
     {
         ObType::Datetime
     } else {
+        // Anthropic: PyTorch tensor detection (before unlikely path)
+        if opt_enabled!(opts, SERIALIZE_NUMPY) {
+            unsafe {
+                let has_numpy = crate::ffi::PyObject_HasAttrString(
+                    obj,
+                    "numpy\0".as_ptr() as *const core::ffi::c_char,
+                ) == 1;
+                let has_cpu = crate::ffi::PyObject_HasAttrString(
+                    obj,
+                    "cpu\0".as_ptr() as *const core::ffi::c_char,
+                ) == 1;
+                let has_detach = crate::ffi::PyObject_HasAttrString(
+                    obj,
+                    "detach\0".as_ptr() as *const core::ffi::c_char,
+                ) == 1;
+
+                if has_numpy && has_cpu && has_detach {
+                    let module = crate::ffi::PyObject_GetAttrString(
+                        ob_type as *mut crate::ffi::PyObject,
+                        "__module__\0".as_ptr() as *const core::ffi::c_char,
+                    );
+
+                    if !module.is_null() {
+                        let module_str = crate::ffi::PyUnicode_AsUTF8(module);
+                        if !module_str.is_null() {
+                            let module_name =
+                                core::ffi::CStr::from_ptr(module_str).to_bytes();
+                            let is_torch = module_name.starts_with(b"torch");
+                            ffi!(Py_DECREF(module));
+
+                            if is_torch {
+                                return ObType::PyTorchTensor;
+                            }
+                        } else {
+                            ffi!(Py_DECREF(module));
+                        }
+                    }
+                }
+            }
+        }
+
         pyobject_to_obtype_unlikely(ob_type, opts)
     }
 }
