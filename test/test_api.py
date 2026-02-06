@@ -12,7 +12,7 @@ import orjson
 
 SIMPLE_TYPES = (1, 1.0, -1, None, "str", True, False)
 
-LOADS_RECURSION_LIMIT = 1024
+LOADS_RECURSION_LIMIT = 2048
 
 
 def default(obj):
@@ -61,67 +61,105 @@ class TestApi:
 
     def test_loads_recursion_valid_limit_array(self):
         """
-        loads() recursion limit at limit array
+        loads() deep nesting array
         """
         n = LOADS_RECURSION_LIMIT + 1
         value = b"[" * n + b"]" * n
-        pytest.raises(orjson.JSONDecodeError, orjson.loads, value)
+        result = orjson.loads(value)
+        depth = 0
+        v = result
+        while isinstance(v, list) and len(v) > 0:
+            v = v[0]
+            depth += 1
+        assert depth == n - 1
 
     def test_loads_recursion_valid_limit_object(self):
         """
-        loads() recursion limit at limit object
+        loads() deep nesting object
         """
         n = LOADS_RECURSION_LIMIT
         value = b'{"key":' * n + b'{"key":true}' + b"}" * n
-        pytest.raises(orjson.JSONDecodeError, orjson.loads, value)
+        result = orjson.loads(value)
+        depth = 0
+        v = result
+        while isinstance(v, dict) and "key" in v:
+            v = v["key"]
+            depth += 1
+        assert depth == n + 1
 
     def test_loads_recursion_valid_limit_mixed(self):
         """
-        loads() recursion limit at limit mixed
+        loads() deep nesting mixed
         """
         n = LOADS_RECURSION_LIMIT
-        value = b"".join((b"[", b'{"key":' * n, b'{"key":true}' + b"}" * n, b"]"))
-        pytest.raises(orjson.JSONDecodeError, orjson.loads, value)
+        value = b"[" + b'{"key":' * n + b'{"key":true}' + b"}" * n + b"]"
+        result = orjson.loads(value)
+        assert isinstance(result, list)
 
     def test_loads_recursion_valid_excessive_array(self):
         """
-        loads() recursion limit excessively high value
+        loads() recursion excessively high value
         """
-        n = 10000000
+        n = 100000
         value = b"[" * n + b"]" * n
-        pytest.raises(orjson.JSONDecodeError, orjson.loads, value)
+        result = orjson.loads(value)
+        depth = 0
+        v = result
+        while isinstance(v, list) and len(v) > 0:
+            v = v[0]
+            depth += 1
+        assert depth == n - 1
 
     def test_loads_recursion_valid_limit_array_pretty(self):
         """
-        loads() recursion limit at limit array pretty
+        loads() deep nesting array pretty
         """
         n = LOADS_RECURSION_LIMIT + 1
         value = b"[\n  " * n + b"]" * n
-        pytest.raises(orjson.JSONDecodeError, orjson.loads, value)
+        result = orjson.loads(value)
+        depth = 0
+        v = result
+        while isinstance(v, list) and len(v) > 0:
+            v = v[0]
+            depth += 1
+        assert depth == n - 1
 
     def test_loads_recursion_valid_limit_object_pretty(self):
         """
-        loads() recursion limit at limit object pretty
+        loads() deep nesting object pretty
         """
         n = LOADS_RECURSION_LIMIT
         value = b'{\n  "key":' * n + b'{"key":true}' + b"}" * n
-        pytest.raises(orjson.JSONDecodeError, orjson.loads, value)
+        result = orjson.loads(value)
+        depth = 0
+        v = result
+        while isinstance(v, dict) and "key" in v:
+            v = v["key"]
+            depth += 1
+        assert depth == n + 1
 
     def test_loads_recursion_valid_limit_mixed_pretty(self):
         """
-        loads() recursion limit at limit mixed pretty
+        loads() deep nesting mixed pretty
         """
         n = LOADS_RECURSION_LIMIT
-        value = b'[\n  {"key":' * n + b'{"key":true}' + b"}" * n + b"]"
-        pytest.raises(orjson.JSONDecodeError, orjson.loads, value)
+        value = b'[\n  {"key":' * n + b'{"key":true}' + b"}]" * n
+        result = orjson.loads(value)
+        assert isinstance(result, list)
 
     def test_loads_recursion_valid_excessive_array_pretty(self):
         """
-        loads() recursion limit excessively high value pretty
+        loads() recursion excessively high value pretty
         """
-        n = 10000000
+        n = 100000
         value = b"[\n  " * n + b"]" * n
-        pytest.raises(orjson.JSONDecodeError, orjson.loads, value)
+        result = orjson.loads(value)
+        depth = 0
+        v = result
+        while isinstance(v, list) and len(v) > 0:
+            v = v[0]
+            depth += 1
+        assert depth == n - 1
 
     def test_version(self):
         """

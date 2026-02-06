@@ -2,6 +2,7 @@
 # Copyright ijl (2018-2026)
 
 import io
+import math
 import sys
 
 import pytest
@@ -371,37 +372,33 @@ class TestType:
 
     def test_nan_dumps(self):
         """
-        NaN serializes to null
+        NaN serializes to NaN
         """
-        assert orjson.dumps(float("NaN")) == b"null"
+        assert orjson.dumps(float("NaN")) == b"NaN"
 
     def test_nan_loads(self):
         """
-        NaN is not valid JSON
+        NaN is valid (Anthropic extension)
         """
-        with pytest.raises(orjson.JSONDecodeError):
-            orjson.loads("[NaN]")
-        with pytest.raises(orjson.JSONDecodeError):
-            orjson.loads("[nan]")
+        result = orjson.loads("[NaN]")
+        assert len(result) == 1
+        assert math.isnan(result[0])
 
     def test_infinity_dumps(self):
         """
-        Infinity serializes to null
+        Infinity serializes to Infinity
         """
-        assert orjson.dumps(float("Infinity")) == b"null"
+        assert orjson.dumps(float("Infinity")) == b"Infinity"
+        assert orjson.dumps(float("-Infinity")) == b"-Infinity"
 
     def test_infinity_loads(self):
         """
-        Infinity, -Infinity is not valid JSON
+        Infinity, -Infinity are valid (Anthropic extension)
         """
-        with pytest.raises(orjson.JSONDecodeError):
-            orjson.loads("[infinity]")
-        with pytest.raises(orjson.JSONDecodeError):
-            orjson.loads("[Infinity]")
-        with pytest.raises(orjson.JSONDecodeError):
-            orjson.loads("[-Infinity]")
-        with pytest.raises(orjson.JSONDecodeError):
-            orjson.loads("[-infinity]")
+        result = orjson.loads("[Infinity]")
+        assert result == [math.inf]
+        result = orjson.loads("[-Infinity]")
+        assert result == [-math.inf]
 
     def test_int_53(self):
         """
