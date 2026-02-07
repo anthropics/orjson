@@ -198,10 +198,15 @@ pub(crate) unsafe extern "C" fn PyInit_orjson() -> *mut PyModuleDef {
                 slot: crate::ffi::Py_mod_multiple_interpreters,
                 value: crate::ffi::Py_MOD_MULTIPLE_INTERPRETERS_NOT_SUPPORTED,
             },
-            #[cfg(Py_3_13)]
+            #[cfg(all(Py_3_13, not(Py_GIL_DISABLED)))]
             PyModuleDef_Slot {
                 slot: crate::ffi::Py_mod_gil,
                 value: crate::ffi::Py_MOD_GIL_USED,
+            },
+            #[cfg(all(Py_3_13, Py_GIL_DISABLED))]
+            PyModuleDef_Slot {
+                slot: crate::ffi::Py_mod_gil,
+                value: crate::ffi::Py_MOD_GIL_NOT_USED,
             },
             PyModuleDef_Slot {
                 slot: 0,
@@ -319,9 +324,34 @@ pub(crate) unsafe extern "C" fn dumps(
             }
         }
 
+        #[cfg(Py_GIL_DISABLED)]
+        {
+            let mut guard = CriticalSectionGuard(core::mem::zeroed());
+            crate::ffi::PyCriticalSection_Begin(&mut guard.0, *args);
+            let ret = serialize(*args, default, opts).map_or_else(
+                |err| raise_dumps_exception_dynamic(err.as_str()),
+                NonNull::as_ptr,
+            );
+            drop(guard);
+            ret
+        }
+
+        #[cfg(not(Py_GIL_DISABLED))]
         serialize(*args, default, opts).map_or_else(
             |err| raise_dumps_exception_dynamic(err.as_str()),
             NonNull::as_ptr,
         )
+    }
+}
+
+#[cfg(Py_GIL_DISABLED)]
+struct CriticalSectionGuard(crate::ffi::PyCriticalSection);
+
+#[cfg(Py_GIL_DISABLED)]
+impl Drop for CriticalSectionGuard {
+    fn drop(&mut self) {
+        unsafe {
+            crate::ffi::PyCriticalSection_End(&mut self.0);
+        }
     }
 }
