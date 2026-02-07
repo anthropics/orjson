@@ -21,6 +21,11 @@ jobs:
             platform: macos-arm
             target: aarch64-apple-darwin
             python-version: '3.14'
+          - os: macos-latest
+            platform: macos-arm
+            target: aarch64-apple-darwin
+            python-version: '3.14t'
+            free-threaded: true
           - os: ubuntu-latest
             platform: manylinux-x86_64
             target: x86_64-unknown-linux-gnu
@@ -33,6 +38,11 @@ jobs:
             platform: manylinux-x86_64
             target: x86_64-unknown-linux-gnu
             python-version: '3.14'
+          - os: ubuntu-latest
+            platform: manylinux-x86_64
+            target: x86_64-unknown-linux-gnu
+            python-version: '3.14t'
+            free-threaded: true
           - os: ubuntu-24.04-arm
             platform: manylinux-aarch64
             target: aarch64-unknown-linux-gnu
@@ -45,6 +55,11 @@ jobs:
             platform: manylinux-aarch64
             target: aarch64-unknown-linux-gnu
             python-version: '3.14'
+          - os: ubuntu-24.04-arm
+            platform: manylinux-aarch64
+            target: aarch64-unknown-linux-gnu
+            python-version: '3.14t'
+            free-threaded: true
 
     steps:
       - uses: actions/checkout@v4
@@ -63,9 +78,15 @@ jobs:
         run: pip install maturin
 
       - name: Build wheel
+        env:
+          ORJSON_BUILD_FREETHREADED: ${{ matrix.free-threaded && '1' || '' }}
         run: |
           if [[ "${{ matrix.platform }}" == manylinux-* ]]; then
-            docker run --rm -v $(pwd):/io ghcr.io/pyo3/maturin:latest build --release --strip --target ${{ matrix.target }} --manylinux 2_17 -i python${{ matrix.python-version }}
+            DOCKER_ENV=""
+            if [[ -n "$ORJSON_BUILD_FREETHREADED" ]]; then
+              DOCKER_ENV="-e ORJSON_BUILD_FREETHREADED=1"
+            fi
+            docker run --rm $DOCKER_ENV -v $(pwd):/io ghcr.io/pyo3/maturin:latest build --release --strip --target ${{ matrix.target }} --manylinux 2_17 -i python${{ matrix.python-version }}
           else
             maturin build --release --strip --target ${{ matrix.target }}
           fi

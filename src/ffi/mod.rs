@@ -115,4 +115,8 @@ pub(crate) use pyo3_ffi::PyModule_Add;
 
 #[cfg(Py_3_13)]
 #[allow(unused_imports)]
-pub(crate) use pyo3_ffi::{Py_MOD_GIL_USED, Py_mod_gil};
+pub(crate) use pyo3_ffi::{Py_MOD_GIL_NOT_USED, Py_MOD_GIL_USED, Py_mod_gil};
+
+#[cfg(Py_GIL_DISABLED)]
+#[allow(unused_imports)]
+pub(crate) use pyo3_ffi::{PyCriticalSection, PyCriticalSection_Begin, PyCriticalSection_End};
