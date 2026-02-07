@@ -125,7 +125,7 @@ macro_rules! impl_serialize_entry {
                 $map.serialize_key($key).unwrap();
                 $map.serialize_value(&FloatSerializer::new(unsafe {
                     PyFloatRef::from_ptr_unchecked($value)
-                }))?;
+                }, $self.state.opts()))?;
             }
             ObType::Bool => {
                 $map.serialize_key($key).unwrap();
@@ -434,10 +434,17 @@ fn non_str_uuid(key: PyUuidRef) -> Result<String, SerializeError> {
 #[allow(clippy::unnecessary_wraps)]
 #[cold]
 #[inline(never)]
-fn non_str_float(key: *mut crate::ffi::PyObject) -> Result<String, SerializeError> {
+fn non_str_float(
+    key: *mut crate::ffi::PyObject,
+    opts: crate::opt::Opt,
+) -> Result<String, SerializeError> {
     let val = ffi!(PyFloat_AS_DOUBLE(key));
     if !val.is_finite() {
-        Ok(String::from("null"))
+        if opt_enabled!(opts, crate::opt::DISALLOW_NAN) {
+            Err(SerializeError::FloatNotFinite)
+        } else {
+            Ok(String::from("null"))
+        }
     } else {
         Ok(String::from(zmij::Buffer::new().format_finite(val)))
     }
@@ -487,7 +494,7 @@ impl DictNonStrKey {
                     }
                 }
                 ObType::Int => non_str_int(key),
-                ObType::Float => non_str_float(key),
+                ObType::Float => non_str_float(key, opts),
                 ObType::Datetime => non_str_datetime(key, opts),
                 ObType::Date => non_str_date(key),
                 ObType::Time => non_str_time(key, opts),

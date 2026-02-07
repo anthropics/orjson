@@ -2,16 +2,18 @@
 // Copyright ijl (2018-2026)
 
 use crate::ffi::PyFloatRef;
+use crate::opt::{Opt, DISALLOW_NAN};
+use crate::serialize::error::SerializeError;
 use serde::ser::{Serialize, Serializer};
 
-#[repr(transparent)]
 pub(crate) struct FloatSerializer {
     ob: PyFloatRef,
+    opts: Opt,
 }
 
 impl FloatSerializer {
-    pub fn new(ptr: PyFloatRef) -> Self {
-        FloatSerializer { ob: ptr }
+    pub fn new(ptr: PyFloatRef, opts: Opt) -> Self {
+        FloatSerializer { ob: ptr, opts: opts }
     }
 }
 
@@ -21,6 +23,10 @@ impl Serialize for FloatSerializer {
     where
         S: Serializer,
     {
-        serializer.serialize_f64(self.ob.value())
+        let value = self.ob.value();
+        if opt_enabled!(self.opts, DISALLOW_NAN) && !value.is_finite() {
+            err!(SerializeError::FloatNotFinite)
+        }
+        serializer.serialize_f64(value)
     }
 }

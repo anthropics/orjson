@@ -400,6 +400,46 @@ class TestType:
         result = orjson.loads("[-Infinity]")
         assert result == [-math.inf]
 
+    def test_disallow_nan_raises(self):
+        """
+        OPT_DISALLOW_NAN raises on NaN and Infinity
+        """
+        for val in (float("nan"), float("inf"), float("-inf")):
+            with pytest.raises(orjson.JSONEncodeError):
+                orjson.dumps(val, option=orjson.OPT_DISALLOW_NAN)
+
+    def test_disallow_nan_finite_ok(self):
+        """
+        OPT_DISALLOW_NAN allows finite floats
+        """
+        assert orjson.dumps(3.14, option=orjson.OPT_DISALLOW_NAN) == b"3.14"
+        assert orjson.dumps(0.0, option=orjson.OPT_DISALLOW_NAN) == b"0.0"
+        assert orjson.dumps(-1.5, option=orjson.OPT_DISALLOW_NAN) == b"-1.5"
+
+    def test_disallow_nan_in_list(self):
+        """
+        OPT_DISALLOW_NAN raises on NaN inside a list
+        """
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps([1.0, float("nan"), 3.0], option=orjson.OPT_DISALLOW_NAN)
+
+    def test_disallow_nan_in_dict(self):
+        """
+        OPT_DISALLOW_NAN raises on Infinity inside a dict value
+        """
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps({"x": float("inf")}, option=orjson.OPT_DISALLOW_NAN)
+
+    def test_disallow_nan_dict_key(self):
+        """
+        OPT_DISALLOW_NAN raises on NaN as a dict key with OPT_NON_STR_KEYS
+        """
+        with pytest.raises(orjson.JSONEncodeError):
+            orjson.dumps(
+                {float("nan"): 1},
+                option=orjson.OPT_DISALLOW_NAN | orjson.OPT_NON_STR_KEYS,
+            )
+
     def test_int_53(self):
         """
         int 53-bit

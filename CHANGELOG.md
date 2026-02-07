@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 3.11.7-post3
+
+### Added
+
+- `OPT_DISALLOW_NAN` option flag for `dumps()`. When set, raises `JSONEncodeError` if a float value is NaN, Infinity, or -Infinity. Default behavior (allowing NaN/Infinity) is unchanged.
+
 ## 3.11.7-post2
 
 ### Added

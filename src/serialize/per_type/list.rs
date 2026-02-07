@@ -117,7 +117,7 @@ impl Serialize for ListTupleSerializer {
                 ObType::Float => {
                     seq.serialize_element(&FloatSerializer::new(unsafe {
                         PyFloatRef::from_ptr_unchecked(value)
-                    }))?;
+                    }, self.state.opts()))?;
                 }
                 ObType::Bool => {
                     seq.serialize_element(&BoolSerializer::new(unsafe {
