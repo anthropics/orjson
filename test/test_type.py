@@ -285,14 +285,14 @@ class TestType:
         arr.extend(b"[]")
         assert orjson.loads(arr) == []
 
-    @pytest.mark.skipif(SUPPORTS_MEMORYVIEW is True, reason="memoryview")
+    @pytest.mark.skipif(SUPPORTS_MEMORYVIEW is False, reason="memoryview")
     def test_memoryview_loads_supported(self):
         """
         memoryview loads supported
         """
         assert orjson.loads(memoryview(b"[]")) == []
 
-    @pytest.mark.skipif(SUPPORTS_MEMORYVIEW is False, reason="memoryview")
+    @pytest.mark.skipif(SUPPORTS_MEMORYVIEW is True, reason="memoryview")
     def test_memoryview_loads_unsupported(self):
         """
         memoryview loads unsupported
@@ -623,9 +623,17 @@ class TestType:
 
     def test_nan_loads_bytes(self):
         """NaN/Infinity from bytes, bytearray, memoryview"""
-        for val in [b"[NaN]", bytearray(b"[NaN]"), memoryview(b"[NaN]")]:
+        nan_inputs: list = [b"[NaN]"]
+        inf_inputs: list = [b"[Infinity]"]
+        if SUPPORTS_BYTEARRAY:
+            nan_inputs.append(bytearray(b"[NaN]"))
+            inf_inputs.append(bytearray(b"[Infinity]"))
+        if SUPPORTS_MEMORYVIEW:
+            nan_inputs.append(memoryview(b"[NaN]"))
+            inf_inputs.append(memoryview(b"[Infinity]"))
+        for val in nan_inputs:
             assert math.isnan(orjson.loads(val)[0])
-        for val in [b"[Infinity]", bytearray(b"[Infinity]"), memoryview(b"[Infinity]")]:
+        for val in inf_inputs:
             assert orjson.loads(val)[0] == float("inf")
 
     def test_object(self):

@@ -10,11 +10,11 @@ from typing import Any
 
 IS_FREETHREADING = sysconfig.get_config_var("Py_GIL_DISABLED")
 
-SUPPORTS_MEMORYVIEW = sys.implementation == "cpython" and not IS_FREETHREADING
+SUPPORTS_MEMORYVIEW = sys.implementation.name == "cpython" and not IS_FREETHREADING
 
 SUPPORTS_BYTEARRAY = not IS_FREETHREADING
 
-SUPPORTS_GETREFCOUNT = sys.implementation == "cpython"
+SUPPORTS_GETREFCOUNT = sys.implementation.name == "cpython"
 
 numpy = None  # type: ignore
 if not IS_FREETHREADING:
