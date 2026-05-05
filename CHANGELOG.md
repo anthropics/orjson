@@ -1,6 +1,27 @@
 # Changelog
 
 
+## 3.11.7-post4
+
+### Added
+
+- `max_depth` keyword argument for `loads()`. Default 1024 (matches upstream
+  orjson's recursion limit). Pass `max_depth=None` for unbounded depth, or a
+  higher integer. Without the kwarg, nesting past 1024 raises `JSONDecodeError`
+  instead of risking a stack-overflow crash.
+- Support for memoryview and bytearray inputs to `loads()`.
+- Basic CPython 3.14t (free-threaded) support.
+
+### Changed
+
+- **Behavior change:** `loads()` with no `max_depth` argument now rejects JSON
+  nested more than 1024 levels deep, matching upstream orjson. Callers that
+  relied on the fork's previous unbounded default should pass `max_depth=None`
+  (or a higher integer) explicitly.
+- Argument-validation errors in `loads()` now raise `TypeError` (matching the
+  pre-keyword `METH_O` behavior) instead of `JSONDecodeError`.
+
+
 ## 3.11.7-post3
 
 ### Added
