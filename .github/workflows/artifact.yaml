@@ -2,7 +2,15 @@
 # Copyright ijl (2022-2026), messense (2022), Dominic LoBue (2022)
 
 name: artifact
-on: push
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish wheels to Artifactory pypi-internal after building'
+        type: boolean
+        required: false
+        default: false
 env:
   FORCE_COLOR: "1"
   ORJSON_BUILD_FREETHREADED: "1"
@@ -740,3 +748,85 @@ jobs:
           packages-dir: dist
           skip-existing: true
           verbose: true
+
+  publish-internal:
+    name: Publish wheels to Artifactory pypi-internal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Manual workflow_dispatch with publish=true, on the anthropic-3.11.7
+    # branch only. The branch check is defense-in-depth; the real guard is
+    # the publish-pypi environment's deployment-branch rule, which must be
+    # configured to allow anthropic-3.11.7 only.
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/anthropic-3.11.7'
+    # Only require the wheels we actually deploy (manylinux x86_64/aarch64,
+    # macos for local dev, sdist). Excludes manylinux_cross (broken on cp314 —
+    # maturin/build-details.json mismatch) and windows_* (pre-existing failures
+    # on the base branch). Missing-artifact downloads fail loudly; this just
+    # avoids gating the publish on platforms we don't ship.
+    needs: [
+      macos_aarch64,
+      macos_universal2_aarch64,
+      manylinux,
+      sdist,
+    ]
+    environment: publish-pypi
+    concurrency:
+      group: pypi-publish
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read version and check .postN suffix
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -oP '^version = "\K[^"]+' Cargo.toml)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if ! [[ "$VERSION" =~ -post[0-9]+$ ]]; then
+            echo "::error::Cargo.toml version = $VERSION lacks a -postN suffix."
+            echo "::error::Forks of upstream PyPI packages must publish as X.Y.Z.postN"
+            echo "::error::(PEP 440 post-release) so they don't collide with upstream X.Y.Z."
+            exit 1
+          fi
+          echo "Publishing fork version $VERSION"
+
+      - uses: actions/download-artifact@v5
+        with:
+          merge-multiple: true
+          path: dist/
+          pattern: orjson_*
+
+      - run: ls -1 dist/
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - run: ./script/check-pypi dist
+
+      - name: Setup JFrog CLI
+        id: setup-jfrog
+        uses: jfrog/setup-jfrog-cli@ff5cb544114ffc152db9cea1cd3d5978d5074946 # v4.5.11 (https://go/pinned-github-action)
+        env:
+          JF_URL: https://artifactory.infra.ant.dev
+        with:
+          oidc-provider-name: github
+          oidc-audience: jfrog-github
+          disable-job-summary: true
+          disable-auto-build-publish: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+
+      - name: Upload wheels to Artifactory
+        env:
+          UV_PUBLISH_USERNAME: ${{ steps.setup-jfrog.outputs.oidc-user }}
+          UV_PUBLISH_PASSWORD: ${{ steps.setup-jfrog.outputs.oidc-token }}
+        run: |
+          set -euo pipefail
+          uv publish dist/* \
+            --publish-url https://artifactory.infra.ant.dev/artifactory/api/pypi/pypi-internal
+          echo "Published wheels to Artifactory pypi-internal"
