@@ -22,7 +22,10 @@ impl Deserializer {
     }
 
     #[inline]
-    pub fn deserialize(&self) -> Result<NonNull<crate::ffi::PyObject>, DeserializeError<'static>> {
+    pub fn deserialize(
+        &self,
+        max_depth: u32,
+    ) -> Result<NonNull<crate::ffi::PyObject>, DeserializeError<'static>> {
         if self.buffer.len() == 2 {
             cold_path!();
             match self.buffer.as_bytes() {
@@ -38,13 +41,14 @@ impl Deserializer {
                 _ => {}
             }
         }
-        crate::deserialize::backend::deserialize(self.buffer.as_str())
+        crate::deserialize::backend::deserialize(self.buffer.as_str(), max_depth)
     }
 }
 
 pub(crate) fn deserialize(
     ptr: *mut crate::ffi::PyObject,
+    max_depth: u32,
 ) -> Result<NonNull<crate::ffi::PyObject>, DeserializeError<'static>> {
     let deserializer = Deserializer::from_pyobject(ptr)?;
-    deserializer.deserialize()
+    deserializer.deserialize(max_depth)
 }

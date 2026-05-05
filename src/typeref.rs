@@ -16,6 +16,7 @@ use crate::ffi::{
 
 pub(crate) static mut DEFAULT: *mut PyObject = null_mut();
 pub(crate) static mut OPTION: *mut PyObject = null_mut();
+pub(crate) static mut MAX_DEPTH: *mut PyObject = null_mut();
 
 pub(crate) static mut NONE: *mut PyObject = null_mut();
 pub(crate) static mut TRUE: *mut PyObject = null_mut();
@@ -157,6 +158,7 @@ fn _init_typerefs_impl() -> bool {
         VALUE_STR = PyUnicode_InternFromString(c"value".as_ptr());
         DEFAULT = PyUnicode_InternFromString(c"default".as_ptr());
         OPTION = PyUnicode_InternFromString(c"option".as_ptr());
+        MAX_DEPTH = PyUnicode_InternFromString(c"max_depth".as_ptr());
 
         JsonEncodeError = PyExc_TypeError;
         Py_INCREF(JsonEncodeError);
