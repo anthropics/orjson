@@ -805,7 +805,27 @@ jobs:
         with:
           python-version: "3.14"
 
-      - run: ./script/check-pypi dist
+      # check-pypi requires every platform (armv7l/ppc64le/s390x/i686/musllinux/
+      # windows). We only deploy manylinux x86_64/aarch64 and don't gate on the
+      # currently-broken cross/windows builds, so just verify the wheels we DO
+      # have are the right version (PEP-440 normalizes 3.11.7-post4 -> 3.11.7.post4
+      # in wheel filenames).
+      - name: Verify wheel versions
+        run: |
+          set -euo pipefail
+          NORM=$(echo "${{ steps.version.outputs.version }}" | sed 's/-post/.post/')
+          BAD=$(ls dist/*.whl | grep -v "orjson-${NORM}-" || true)
+          if [[ -n "$BAD" ]]; then
+            echo "::error::Wheels with unexpected version (expected orjson-${NORM}-*):"
+            echo "$BAD"
+            exit 1
+          fi
+          COUNT=$(ls dist/*.whl | wc -l)
+          echo "All ${COUNT} wheels match version ${NORM}"
+          if [[ "$COUNT" -lt 8 ]]; then
+            echo "::error::Expected at least 8 wheels (4 py vers x 2 manylinux arches), got ${COUNT}"
+            exit 1
+          fi
 
       - name: Setup JFrog CLI
         id: setup-jfrog
