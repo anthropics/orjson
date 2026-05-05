@@ -590,7 +590,10 @@ class TestType:
 
     def test_nan_inf_in_list(self):
         """NaN/Infinity in a list"""
-        assert orjson.dumps([1.0, float("nan"), float("inf"), float("-inf")]) == b'[1.0,NaN,Infinity,-Infinity]'
+        assert (
+            orjson.dumps([1.0, float("nan"), float("inf"), float("-inf")])
+            == b"[1.0,NaN,Infinity,-Infinity]"
+        )
 
     def test_nan_inf_in_dict_value(self):
         """NaN/Infinity as dict values"""
@@ -600,7 +603,13 @@ class TestType:
 
     def test_nan_inf_pretty(self):
         """NaN/Infinity with OPT_INDENT_2"""
-        assert orjson.dumps({"val": float("nan"), "inf": float("inf")}, option=orjson.OPT_INDENT_2) == b'{\n  "val": NaN,\n  "inf": Infinity\n}'
+        assert (
+            orjson.dumps(
+                {"val": float("nan"), "inf": float("inf")},
+                option=orjson.OPT_INDENT_2,
+            )
+            == b'{\n  "val": NaN,\n  "inf": Infinity\n}'
+        )
 
     def test_nan_inf_roundtrip(self):
         """NaN/Infinity roundtrip through dumps/loads"""

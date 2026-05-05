@@ -60,12 +60,19 @@ use crate::exception::{
     raise_dumps_exception_dynamic, raise_dumps_exception_fixed, raise_loads_exception,
 };
 use crate::ffi::{
-    METH_KEYWORDS, METH_O, Py_SIZE, Py_ssize_t, PyCFunction_NewEx, PyIntRef, PyMethodDef,
-    PyMethodDefPointer, PyModuleDef, PyModuleDef_HEAD_INIT, PyModuleDef_Slot, PyNoneRef, PyObject,
-    PyTupleRef, PyUnicode_FromStringAndSize, PyUnicode_InternFromString, PyVectorcall_NARGS,
+    METH_KEYWORDS, Py_SIZE, Py_ssize_t, PyCFunction_NewEx, PyErr_Clear, PyErr_Occurred,
+    PyErr_SetString, PyExc_TypeError, PyIntRef, PyLong_AsLongLong, PyLong_AsUnsignedLongLong,
+    PyMethodDef, PyMethodDefPointer, PyModuleDef, PyModuleDef_HEAD_INIT, PyModuleDef_Slot,
+    PyNoneRef, PyObject, PyTupleRef, PyUnicode_FromStringAndSize, PyUnicode_InternFromString,
+    PyVectorcall_NARGS,
 };
 use crate::serialize::serialize;
 use crate::util::{isize_to_usize, usize_to_isize};
+
+// Matches upstream orjson's YYJSON_READER_CONTAINER_RECURSION_LIMIT.
+// The fork removed the C-level limit so callers that need >1024 can pass
+// max_depth=None or a larger int; the default keeps upstream's safety property.
+const DEFAULT_MAX_DEPTH: u32 = 1024;
 
 #[cfg(Py_3_13)]
 macro_rules! add {
@@ -130,12 +137,15 @@ pub(crate) unsafe extern "C" fn orjson_init_exec(mptr: *mut PyObject) -> c_int {
         }
 
         {
-            let loads_doc = c"loads(obj, /)\n--\n\nDeserialize JSON to Python objects.";
+            let loads_doc =
+                c"loads(obj, /, *, max_depth=1024)\n--\n\nDeserialize JSON to Python objects. Raise JSONDecodeError when container nesting recurses past max_depth levels (default 1024, matching upstream orjson). Pass None for unbounded depth, or a higher int. Bounds recursion only, so empty leaf containers don't count.";
 
             let wrapped_loads = Box::new(PyMethodDef {
                 ml_name: c"loads".as_ptr(),
-                ml_meth: PyMethodDefPointer { PyCFunction: loads },
-                ml_flags: METH_O,
+                ml_meth: PyMethodDefPointer {
+                    PyCFunctionFastWithKeywords: loads,
+                },
+                ml_flags: crate::ffi::METH_FASTCALL | METH_KEYWORDS,
                 ml_doc: loads_doc.as_ptr(),
             });
             let func = PyCFunction_NewEx(
@@ -231,11 +241,6 @@ pub(crate) unsafe extern "C" fn PyInit_orjson() -> *mut PyModuleDef {
     }
 }
 
-#[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn loads(_self: *mut PyObject, obj: *mut PyObject) -> *mut PyObject {
-    deserialize(obj).map_or_else(raise_loads_exception, NonNull::as_ptr)
-}
-
 #[cfg(CPython)]
 macro_rules! matches_kwarg {
     ($val:expr, $ref:expr) => {
@@ -248,6 +253,78 @@ macro_rules! matches_kwarg {
     ($val:expr, $ref:expr) => {
         unsafe { crate::ffi::PyObject_Hash($val) == crate::ffi::PyObject_Hash($ref) }
     };
+}
+
+#[unsafe(no_mangle)]
+pub(crate) unsafe extern "C" fn loads(
+    _self: *mut PyObject,
+    args: *const *mut PyObject,
+    nargs: Py_ssize_t,
+    kwnames: *mut PyObject,
+) -> *mut PyObject {
+    unsafe {
+        let num_args = PyVectorcall_NARGS(isize_to_usize(nargs));
+        if num_args != 1 {
+            cold_path!();
+            PyErr_SetString(
+                PyExc_TypeError,
+                c"loads() requires exactly 1 positional argument".as_ptr(),
+            );
+            return null_mut();
+        }
+        let mut max_depth: u32 = DEFAULT_MAX_DEPTH;
+        if !kwnames.is_null() {
+            cold_path!();
+            let kwob = PyTupleRef::from_ptr_unchecked(kwnames);
+            for i in 0..=Py_SIZE(kwnames).saturating_sub(1) {
+                let arg = kwob.get(i.cast_unsigned());
+                if matches_kwarg!(arg, typeref::MAX_DEPTH) {
+                    let val = *args.offset(num_args + i);
+                    if core::ptr::eq(val, PyNoneRef::none().as_ptr()) {
+                        max_depth = 0;
+                    } else {
+                        if PyIntRef::from_ptr(val).is_err() {
+                            PyErr_SetString(
+                                PyExc_TypeError,
+                                c"max_depth must be a positive int or None".as_ptr(),
+                            );
+                            return null_mut();
+                        }
+                        let n = PyLong_AsLongLong(val);
+                        max_depth = if n == -1 && !PyErr_Occurred().is_null() {
+                            PyErr_Clear();
+                            let _ = PyLong_AsUnsignedLongLong(val);
+                            if PyErr_Occurred().is_null() {
+                                u32::MAX - 1
+                            } else {
+                                PyErr_Clear();
+                                PyErr_SetString(
+                                    PyExc_TypeError,
+                                    c"max_depth must be a positive int or None".as_ptr(),
+                                );
+                                return null_mut();
+                            }
+                        } else if n < 1 {
+                            PyErr_SetString(
+                                PyExc_TypeError,
+                                c"max_depth must be a positive int or None".as_ptr(),
+                            );
+                            return null_mut();
+                        } else {
+                            u32::try_from(n).unwrap_or(u32::MAX - 1)
+                        };
+                    }
+                } else {
+                    PyErr_SetString(
+                        PyExc_TypeError,
+                        c"loads() got an unexpected keyword argument".as_ptr(),
+                    );
+                    return null_mut();
+                }
+            }
+        }
+        deserialize(*args, max_depth).map_or_else(raise_loads_exception, NonNull::as_ptr)
+    }
 }
 
 #[unsafe(no_mangle)]

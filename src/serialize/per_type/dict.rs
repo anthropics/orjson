@@ -123,9 +123,10 @@ macro_rules! impl_serialize_entry {
             }
             ObType::Float => {
                 $map.serialize_key($key).unwrap();
-                $map.serialize_value(&FloatSerializer::new(unsafe {
-                    PyFloatRef::from_ptr_unchecked($value)
-                }, $self.state.opts()))?;
+                $map.serialize_value(&FloatSerializer::new(
+                    unsafe { PyFloatRef::from_ptr_unchecked($value) },
+                    $self.state.opts(),
+                ))?;
             }
             ObType::Bool => {
                 $map.serialize_key($key).unwrap();

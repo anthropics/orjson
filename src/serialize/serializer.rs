@@ -79,8 +79,11 @@ impl Serialize for PyObjectSerializer {
                 )
                 .serialize(serializer),
                 ObType::None => NoneSerializer::new().serialize(serializer),
-                ObType::Float => FloatSerializer::new(PyFloatRef::from_ptr_unchecked(self.ptr), self.state.opts())
-                    .serialize(serializer),
+                ObType::Float => FloatSerializer::new(
+                    PyFloatRef::from_ptr_unchecked(self.ptr),
+                    self.state.opts(),
+                )
+                .serialize(serializer),
                 ObType::Bool => {
                     BoolSerializer::new(unsafe { PyBoolRef::from_ptr_unchecked(self.ptr) })
                         .serialize(serializer)
@@ -129,9 +132,7 @@ impl Serialize for PyObjectSerializer {
                     FragmentSerializer::new(unsafe { PyFragmentRef::from_ptr_unchecked(self.ptr) })
                         .serialize(serializer)
                 }
-                ObType::PyTorchTensor => {
-                    PyTorchSerializer::new(self).serialize(serializer)
-                }
+                ObType::PyTorchTensor => PyTorchSerializer::new(self).serialize(serializer),
                 ObType::Unknown => DefaultSerializer::new(self).serialize(serializer),
             }
         }

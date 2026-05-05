@@ -59,13 +59,127 @@ class TestApi:
         """
         pytest.raises(orjson.JSONDecodeError, orjson.loads, "[" * (1024 * 1024))
 
+    @pytest.mark.parametrize(
+        "doc",
+        [
+            b"[" * 2000 + b"]" * 2000,
+            b'{"k":' * 2000 + b"1" + b"}" * 2000,
+            b"[1," + b"[" * 2000 + b"]" * 2000 + b",2]",
+        ],
+        ids=["array", "object", "siblings"],
+    )
+    def test_loads_max_depth_exceeded(self, doc):
+        """
+        loads(max_depth=N) rejects nesting past N
+        """
+        with pytest.raises(orjson.JSONDecodeError, match="max_depth exceeded"):
+            orjson.loads(doc, max_depth=1024)
+        assert orjson.loads(doc, max_depth=None) is not None
+
+    def test_loads_max_depth_under(self):
+        """
+        loads(max_depth=N) accepts nesting at or under N
+        """
+        assert isinstance(
+            orjson.loads(b"[" * 500 + b"null" + b"]" * 500, max_depth=1024),
+            list,
+        )
+        assert orjson.loads(b"[1]", max_depth=None) == [1]
+        assert orjson.loads(b"42", max_depth=1) == 42
+
+    def test_loads_max_depth_fencepost(self):
+        """
+        loads(max_depth=N) allows exactly N container levels.
+
+        Empty leaf containers don't count toward max_depth (resource bound,
+        not structural) — populate_* never recurses for an empty container.
+        """
+        assert orjson.loads(b"[1]", max_depth=1) == [1]
+        assert orjson.loads(b"[[]]", max_depth=1) == [[]]
+        assert orjson.loads(b'{"a":{}}', max_depth=1) == {"a": {}}
+        with pytest.raises(orjson.JSONDecodeError, match="max_depth exceeded"):
+            orjson.loads(b"[[1]]", max_depth=1)
+        assert orjson.loads(b'{"a":1}', max_depth=1) == {"a": 1}
+        with pytest.raises(orjson.JSONDecodeError, match="max_depth exceeded"):
+            orjson.loads(b'{"a":{"b":1}}', max_depth=1)
+        assert orjson.loads(b'{"a":[{"b":1}]}', max_depth=3) == {"a": [{"b": 1}]}
+        with pytest.raises(orjson.JSONDecodeError, match="max_depth exceeded"):
+            orjson.loads(b'{"a":[{"b":1}]}', max_depth=2)
+
+    @pytest.mark.parametrize("bad", [True, False, 0, -1, -(2**100), "x", 2.0])
+    def test_loads_max_depth_invalid_value(self, bad):
+        """
+        loads(max_depth=) with non-positive-int raises TypeError
+        """
+        with pytest.raises(TypeError, match="positive int"):
+            orjson.loads(b"[]", max_depth=bad)  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize("big", [2**40, 2**63])
+    def test_loads_max_depth_large_clamped(self, big):
+        """
+        loads(max_depth=) with huge value is clamped, not rejected
+        """
+        assert orjson.loads(b"[1]", max_depth=big) == [1]
+
+    def test_loads_default_depth_under(self):
+        """
+        loads() with no kwarg accepts nesting at the default limit (1024)
+        """
+        n = 1024
+        assert isinstance(orjson.loads(b"[" * n + b"1" + b"]" * n), list)
+        assert isinstance(
+            orjson.loads(b'{"k":' * (n - 1) + b"1" + b"}" * (n - 1)),
+            dict,
+        )
+
+    def test_loads_default_depth_exceeded(self):
+        """
+        loads() with no kwarg rejects nesting past the default limit (matches upstream)
+        """
+        n = 1025
+        with pytest.raises(orjson.JSONDecodeError, match="max_depth exceeded"):
+            orjson.loads(b"[" * n + b"1" + b"]" * n)
+        with pytest.raises(orjson.JSONDecodeError, match="max_depth exceeded"):
+            orjson.loads(b'{"k":' * n + b"1" + b"}" * n)
+
+    def test_loads_max_depth_none_unbounded(self):
+        """
+        loads(max_depth=None) is the unbounded opt-out
+        """
+        n = LOADS_RECURSION_LIMIT * 4
+        assert isinstance(
+            orjson.loads(b"[" * n + b"1" + b"]" * n, max_depth=None),
+            list,
+        )
+
+    def test_loads_max_depth_higher_override(self):
+        """
+        loads(max_depth=N) with N > default raises the limit
+        """
+        n = 4096
+        body = b"[" * n + b"1" + b"]" * n
+        assert isinstance(orjson.loads(body, max_depth=n), list)
+        with pytest.raises(orjson.JSONDecodeError):
+            orjson.loads(body)
+
+    def test_loads_arity(self):
+        """
+        loads() arg validation raises TypeError, matching METH_O behavior
+        """
+        with pytest.raises(TypeError):
+            orjson.loads()  # type: ignore[call-arg]
+        with pytest.raises(TypeError):
+            orjson.loads(b"[]", b"[]")  # type: ignore[call-arg, misc, arg-type]
+        with pytest.raises(TypeError, match="unexpected keyword"):
+            orjson.loads(b"[]", foo=1)  # type: ignore[call-arg]
+
     def test_loads_recursion_valid_limit_array(self):
         """
         loads() deep nesting array
         """
         n = LOADS_RECURSION_LIMIT + 1
         value = b"[" * n + b"]" * n
-        result = orjson.loads(value)
+        result = orjson.loads(value, max_depth=None)
         depth = 0
         v = result
         while isinstance(v, list) and len(v) > 0:
@@ -79,7 +193,7 @@ class TestApi:
         """
         n = LOADS_RECURSION_LIMIT
         value = b'{"key":' * n + b'{"key":true}' + b"}" * n
-        result = orjson.loads(value)
+        result = orjson.loads(value, max_depth=None)
         depth = 0
         v = result
         while isinstance(v, dict) and "key" in v:
@@ -93,16 +207,16 @@ class TestApi:
         """
         n = LOADS_RECURSION_LIMIT
         value = b"[" + b'{"key":' * n + b'{"key":true}' + b"}" * n + b"]"
-        result = orjson.loads(value)
+        result = orjson.loads(value, max_depth=None)
         assert isinstance(result, list)
 
     def test_loads_recursion_valid_excessive_array(self):
         """
-        loads() recursion excessively high value
+        loads(max_depth=None) opt-out allows nesting past the default limit
         """
-        n = 100000
+        n = LOADS_RECURSION_LIMIT * 4
         value = b"[" * n + b"]" * n
-        result = orjson.loads(value)
+        result = orjson.loads(value, max_depth=None)
         depth = 0
         v = result
         while isinstance(v, list) and len(v) > 0:
@@ -116,7 +230,7 @@ class TestApi:
         """
         n = LOADS_RECURSION_LIMIT + 1
         value = b"[\n  " * n + b"]" * n
-        result = orjson.loads(value)
+        result = orjson.loads(value, max_depth=None)
         depth = 0
         v = result
         while isinstance(v, list) and len(v) > 0:
@@ -130,7 +244,7 @@ class TestApi:
         """
         n = LOADS_RECURSION_LIMIT
         value = b'{\n  "key":' * n + b'{"key":true}' + b"}" * n
-        result = orjson.loads(value)
+        result = orjson.loads(value, max_depth=None)
         depth = 0
         v = result
         while isinstance(v, dict) and "key" in v:
@@ -144,16 +258,16 @@ class TestApi:
         """
         n = LOADS_RECURSION_LIMIT
         value = b'[\n  {"key":' * n + b'{"key":true}' + b"}]" * n
-        result = orjson.loads(value)
+        result = orjson.loads(value, max_depth=None)
         assert isinstance(result, list)
 
     def test_loads_recursion_valid_excessive_array_pretty(self):
         """
-        loads() recursion excessively high value pretty
+        loads(max_depth=None) opt-out allows pretty nesting past the default limit
         """
-        n = 100000
+        n = LOADS_RECURSION_LIMIT * 4
         value = b"[\n  " * n + b"]" * n
-        result = orjson.loads(value)
+        result = orjson.loads(value, max_depth=None)
         depth = 0
         v = result
         while isinstance(v, list) and len(v) > 0:

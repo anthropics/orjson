@@ -67,6 +67,7 @@ fn unsafe_yyjson_get_next_non_container(val: *mut yyjson_val) -> *mut yyjson_val
 
 pub(crate) fn deserialize(
     data: &'static str,
+    max_depth: u32,
 ) -> Result<NonNull<crate::ffi::PyObject>, DeserializeError<'static>> {
     assume!(!data.is_empty());
     let buffer_capacity = buffer_capacity_to_allocate(data.len());
@@ -125,14 +126,27 @@ pub(crate) fn deserialize(
             }
         } else if is_yyjson_tag!(val, TAG_ARRAY) {
             let pyval = PyListRef::with_capacity(unsafe_yyjson_get_len(val));
-            if unsafe_yyjson_get_len(val) > 0 {
-                populate_yy_array(pyval.clone(), val);
+            if unsafe_yyjson_get_len(val) > 0
+                && !populate_yy_array(pyval.clone(), val, 1, max_depth)
+            {
+                // list_dealloc Py_XDECREFs NULL slots safely (PyList_New contract)
+                ffi!(Py_DECREF(pyval.as_ptr()));
+                ffi!(PyMem_Free(buffer_ptr));
+                return Err(DeserializeError::invalid(Cow::Borrowed(
+                    "max_depth exceeded",
+                )));
             }
             pyval.as_non_null_ptr()
         } else {
             let pyval = PyDictRef::with_capacity(unsafe_yyjson_get_len(val));
-            if unsafe_yyjson_get_len(val) > 0 {
-                populate_yy_object(pyval.clone(), val);
+            if unsafe_yyjson_get_len(val) > 0
+                && !populate_yy_object(pyval.clone(), val, 1, max_depth)
+            {
+                ffi!(Py_DECREF(pyval.as_ptr()));
+                ffi!(PyMem_Free(buffer_ptr));
+                return Err(DeserializeError::invalid(Cow::Borrowed(
+                    "max_depth exceeded",
+                )));
             }
             pyval.as_non_null_ptr()
         }
@@ -195,7 +209,16 @@ fn parse_yy_f64(elem: *mut yyjson_val) -> NonNull<crate::ffi::PyObject> {
 }
 
 #[inline(never)]
-fn populate_yy_array(mut list: PyListRef, elem: *mut yyjson_val) {
+fn populate_yy_array(
+    mut list: PyListRef,
+    elem: *mut yyjson_val,
+    depth: u32,
+    max_depth: u32,
+) -> bool {
+    if max_depth != 0 && depth > max_depth {
+        cold_path!();
+        return false;
+    }
     unsafe {
         let len = unsafe_yyjson_get_len(elem);
         assume!(len >= 1);
@@ -209,14 +232,28 @@ fn populate_yy_array(mut list: PyListRef, elem: *mut yyjson_val) {
                 if is_yyjson_tag!(val, TAG_ARRAY) {
                     let pyval = PyListRef::with_capacity(unsafe_yyjson_get_len(val));
                     list.set(idx, pyval.as_ptr());
-                    if unsafe_yyjson_get_len(val) > 0 {
-                        populate_yy_array(pyval.clone(), val);
+                    if unsafe_yyjson_get_len(val) > 0
+                        && !populate_yy_array(
+                            pyval.clone(),
+                            val,
+                            depth.saturating_add(1),
+                            max_depth,
+                        )
+                    {
+                        return false;
                     }
                 } else {
                     let pyval = PyDictRef::with_capacity(unsafe_yyjson_get_len(val));
                     list.set(idx, pyval.as_ptr());
-                    if unsafe_yyjson_get_len(val) > 0 {
-                        populate_yy_object(pyval.clone(), val);
+                    if unsafe_yyjson_get_len(val) > 0
+                        && !populate_yy_object(
+                            pyval.clone(),
+                            val,
+                            depth.saturating_add(1),
+                            max_depth,
+                        )
+                    {
+                        return false;
                     }
                 }
             } else {
@@ -235,10 +272,20 @@ fn populate_yy_array(mut list: PyListRef, elem: *mut yyjson_val) {
             }
         }
     }
+    true
 }
 
 #[inline(never)]
-fn populate_yy_object(mut dict: PyDictRef, elem: *mut yyjson_val) {
+fn populate_yy_object(
+    mut dict: PyDictRef,
+    elem: *mut yyjson_val,
+    depth: u32,
+    max_depth: u32,
+) -> bool {
+    if max_depth != 0 && depth > max_depth {
+        cold_path!();
+        return false;
+    }
     unsafe {
         let len = unsafe_yyjson_get_len(elem);
         assume!(len >= 1);
@@ -260,14 +307,23 @@ fn populate_yy_object(mut dict: PyDictRef, elem: *mut yyjson_val) {
                 if is_yyjson_tag!(val, TAG_ARRAY) {
                     let pyval = PyListRef::with_capacity(unsafe_yyjson_get_len(val));
                     dict.set(pykey, pyval.as_ptr());
-                    if unsafe_yyjson_get_len(val) > 0 {
-                        populate_yy_array(pyval, val);
+                    if unsafe_yyjson_get_len(val) > 0
+                        && !populate_yy_array(pyval, val, depth.saturating_add(1), max_depth)
+                    {
+                        return false;
                     }
                 } else {
                     let pyval = PyDictRef::with_capacity(unsafe_yyjson_get_len(val));
                     dict.set(pykey, pyval.as_ptr());
-                    if unsafe_yyjson_get_len(val) > 0 {
-                        populate_yy_object(pyval.clone(), val);
+                    if unsafe_yyjson_get_len(val) > 0
+                        && !populate_yy_object(
+                            pyval.clone(),
+                            val,
+                            depth.saturating_add(1),
+                            max_depth,
+                        )
+                    {
+                        return false;
                     }
                 }
             } else {
@@ -287,4 +343,5 @@ fn populate_yy_object(mut dict: PyDictRef, elem: *mut yyjson_val) {
             }
         }
     }
+    true
 }

@@ -33,9 +33,8 @@ impl Serialize for PyTorchSerializer<'_> {
             // Approach: detach -> cpu -> numpy
 
             // Get detach() method from tensor if it requires grad
-            let detach_method = crate::ffi::PyUnicode_InternFromString(
-                "detach\0".as_ptr() as *const c_char,
-            );
+            let detach_method =
+                crate::ffi::PyUnicode_InternFromString("detach\0".as_ptr() as *const c_char);
             let detached = crate::ffi::PyObject_CallMethodObjArgs(
                 ptr,
                 detach_method,
