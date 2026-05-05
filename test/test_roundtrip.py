@@ -176,4 +176,3 @@ class TestJsonChecker:
         roundtrip027.json
         """
         self._run_roundtrip_json("roundtrip27.json", byte_exact=False)
-

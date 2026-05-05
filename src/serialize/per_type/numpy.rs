@@ -219,7 +219,11 @@ impl NumpyArray {
             debug_assert!(unsafe { (*array).nd >= 0 });
             let num_dimensions = unsafe { (*array).nd.cast_unsigned() as usize };
             let is_zero_dimensional = num_dimensions == 0;
-            let effective_dimensions = if is_zero_dimensional { 1 } else { num_dimensions };
+            let effective_dimensions = if is_zero_dimensional {
+                1
+            } else {
+                num_dimensions
+            };
             match ItemType::find(array, ptr) {
                 None => {
                     ffi!(Py_DECREF(capsule));

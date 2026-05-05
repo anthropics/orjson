@@ -79,8 +79,7 @@ pub(crate) fn pyobject_to_obtype(obj: *mut crate::ffi::PyObject, opts: Opt) -> O
                     if !module.is_null() {
                         let module_str = crate::ffi::PyUnicode_AsUTF8(module);
                         if !module_str.is_null() {
-                            let module_name =
-                                core::ffi::CStr::from_ptr(module_str).to_bytes();
+                            let module_name = core::ffi::CStr::from_ptr(module_str).to_bytes();
                             let is_torch = module_name.starts_with(b"torch");
                             ffi!(Py_DECREF(module));
 

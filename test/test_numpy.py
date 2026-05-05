@@ -534,9 +534,7 @@ class TestNumpy:
         )
 
     def test_numpy_array_d0(self):
-        assert (
-            orjson.dumps(numpy.array(42), option=orjson.OPT_SERIALIZE_NUMPY) == b"42"
-        )
+        assert orjson.dumps(numpy.array(42), option=orjson.OPT_SERIALIZE_NUMPY) == b"42"
         assert (
             orjson.dumps(numpy.array(3.14), option=orjson.OPT_SERIALIZE_NUMPY)
             == b"3.14"
@@ -1078,26 +1076,44 @@ class TestNumpy:
 
     def test_numpy_array_d0_float16(self):
         array = numpy.array(numpy.float16(1.5))
-        assert orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY) == b'1.5'
+        assert orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY) == b"1.5"
 
     def test_numpy_array_d0_nan_inf(self):
-        assert orjson.dumps(numpy.array(numpy.nan), option=orjson.OPT_SERIALIZE_NUMPY) == b'NaN'
-        assert orjson.dumps(numpy.array(numpy.inf), option=orjson.OPT_SERIALIZE_NUMPY) == b'Infinity'
-        assert orjson.dumps(numpy.array(-numpy.inf), option=orjson.OPT_SERIALIZE_NUMPY) == b'-Infinity'
+        assert (
+            orjson.dumps(numpy.array(numpy.nan), option=orjson.OPT_SERIALIZE_NUMPY)
+            == b"NaN"
+        )
+        assert (
+            orjson.dumps(numpy.array(numpy.inf), option=orjson.OPT_SERIALIZE_NUMPY)
+            == b"Infinity"
+        )
+        assert (
+            orjson.dumps(numpy.array(-numpy.inf), option=orjson.OPT_SERIALIZE_NUMPY)
+            == b"-Infinity"
+        )
 
     def test_numpy_array_d0_unsigned(self):
         for dtype in [numpy.uint8, numpy.uint16, numpy.uint32, numpy.uint64]:
             array = numpy.array(42, dtype=dtype)
-            assert orjson.loads(orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY)) == 42
+            assert (
+                orjson.loads(orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY))
+                == 42
+            )
 
     def test_numpy_array_d0_signed(self):
         for dtype in [numpy.int8, numpy.int16, numpy.int32]:
             array = numpy.array(-7, dtype=dtype)
-            assert orjson.loads(orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY)) == -7
+            assert (
+                orjson.loads(orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY))
+                == -7
+            )
 
     def test_numpy_array_d0_datetime64(self):
         array = numpy.array(numpy.datetime64("2021-01-01"))
-        assert orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY) == b'"2021-01-01T00:00:00"'
+        assert (
+            orjson.dumps(array, option=orjson.OPT_SERIALIZE_NUMPY)
+            == b'"2021-01-01T00:00:00"'
+        )
 
     def test_numpy_repeated(self):
         data = numpy.array([[[1, 2], [3, 4], [5, 6], [7, 8]]], numpy.int64)  # type: ignore

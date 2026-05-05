@@ -2,7 +2,7 @@
 // Copyright ijl (2018-2026)
 
 use crate::ffi::PyFloatRef;
-use crate::opt::{Opt, DISALLOW_NAN};
+use crate::opt::{DISALLOW_NAN, Opt};
 use crate::serialize::error::SerializeError;
 use serde::ser::{Serialize, Serializer};
 
@@ -13,7 +13,10 @@ pub(crate) struct FloatSerializer {
 
 impl FloatSerializer {
     pub fn new(ptr: PyFloatRef, opts: Opt) -> Self {
-        FloatSerializer { ob: ptr, opts: opts }
+        FloatSerializer {
+            ob: ptr,
+            opts: opts,
+        }
     }
 }
 
